@@ -1,0 +1,26 @@
+# School related
+lecture_1/
+lecture_2/
+lecture_3/
+lecture_4/
+lecture_5/
+lecture_6/
+lecture_7/
+pymongo_course/
+
+.venv/
+.idea/
+
+# Quarto
+_site/
+.quarto/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Files
+main.py
+
+# Windows Scripts
+open_jupyter.bat
+open_terminal.bat
