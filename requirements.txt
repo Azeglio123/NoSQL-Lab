@@ -9,6 +9,9 @@ pymysql
 mysql-connector
 sqlalchemy
 requests
+json
+time
+string
 beautifulsoup4
 nbconvert
 jupyter_contrib_nbextensions
