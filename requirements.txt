@@ -16,3 +16,4 @@ beautifulsoup4
 nbconvert
 jupyter_contrib_nbextensions
 psycopg2-binary
+python-dotenv
