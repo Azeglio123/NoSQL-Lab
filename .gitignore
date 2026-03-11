@@ -8,8 +8,10 @@ lecture_6/
 lecture_7/
 pymongo_course/
 
+# Environment
 .venv/
 .idea/
+.env
 
 # Quarto
 _site/
