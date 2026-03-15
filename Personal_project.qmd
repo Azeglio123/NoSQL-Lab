@@ -95,7 +95,7 @@ print("rockets_raw:", rockets_raw.count_documents({}))
 print("launchpads_raw:", launchpads_raw.count_documents({}))
 ```
 
-## Extract & Load
+## Raw Data Loading
 
 ```{python}
 #| label: loading-raw-data
@@ -140,6 +140,8 @@ if launchpads_data:
 print("Documents in launchpads_raw:", launchpads_raw.count_documents({}))
 ```
 
+## Data Inspection
+
 ```{python}
 #| label: sanity-check-raw-data
 
@@ -157,6 +159,7 @@ print(launchpads_raw.find_one({}, {"name": 1, "full_name": 1, "locality": 1, "re
 ```{python}
 #| label: check-null/missing
 
+# check for null/missing fields
 important_fields = ["id", "name", "date_utc", "success", "rocket", "launchpad", "cores", "payloads"]
 
 for field in important_fields:
@@ -172,6 +175,7 @@ for field in important_fields:
 ```{python}
 #| label: check-date-quality
 
+# check date quality
 pp.pprint(list(launches_raw.aggregate([
     {
         "$project": {
@@ -188,6 +192,7 @@ pp.pprint(list(launches_raw.aggregate([
 ```{python}
 #| label: check-success-values
 
+# check success values
 pp.pprint(list(launches_raw.aggregate([
     {
         "$group": {
@@ -202,6 +207,7 @@ pp.pprint(list(launches_raw.aggregate([
 ```{python}
 #| label: inspect-array-sizes-of-cores-and-payloads
 
+# inspect array sizes of cores and payloads
 pp.pprint(list(launches_raw.aggregate([
     {
         "$project": {
@@ -214,24 +220,11 @@ pp.pprint(list(launches_raw.aggregate([
 ])))
 ```
 
-```{python}
-#| label: inspect-array-sizes-of-cores-and-payloads
-
-pp.pprint(list(launches_raw.aggregate([
-    {
-        "$project": {
-            "name": 1,
-            "core_count": {"$size": {"$ifNull": ["$cores", []]}},
-            "payload_count": {"$size": {"$ifNull": ["$payloads", []]}}
-        }
-    },
-    {"$limit": 10}
-])))
-```
 
 ```{python}
 #| label: check-launches-empty-arrays
 
+# check launches empty cores and payloads
 print("Launches with empty/missing cores:",
       launches_raw.count_documents({
           "$expr": {"$eq": [{"$size": {"$ifNull": ["$cores", []]}}, 0]}
@@ -244,8 +237,7 @@ print("Launches with empty/missing payloads:",
 ```
 
 
-
-## Transform
+## Transform & Staging
 
 ```{python}
 #| label: optional-drop-of-stage-collections
