@@ -18,6 +18,8 @@ format:
 
 
 ```{python}
+#| label: loading-imports
+
 import sys
 !{sys.executable} -m pip install -r requirements.txt
 
@@ -30,30 +32,45 @@ import json
 import time
 import string
 import os
+from dotenv import load_dotenv
 ```
 
 ```{python}
+#| label: config
+
 # API and Database details
-#load_dotenv()
-API_URL = "https://api.spacexdata.com/v4/launches"
+load_dotenv()
+
+# MongoDB
 CNX_STR = os.getenv("MONGO_URI")
 DB_NAME = "spacexdb"
-COLL_NAME = "launches"
+
+# SpaceX API endpoints
+LAUNCHES_URL = "https://api.spacexdata.com/v4/launches"
+ROCKETS_URL = "https://api.spacexdata.com/v4/rockets"
+LAUNCHPADS_URL = "https://api.spacexdata.com/v4/launchpads"
 ```
 
 
-#ELT Process
+# ELT Process
 
 ## DB Setup
 
 ```{python}
-# connection to MongoDB
+#| label: connection
+
+# Connection to MongoDB
 client = pymongo.MongoClient(CNX_STR)
 db = client[DB_NAME]
-launches = db[COLL_NAME]
+
+launches_raw = db["launches_raw"]
+rockets_raw = db["rockets_raw"]
+launchpads_raw = db["launchpads_raw"]
 ```
 
 ```{python}
+#| label: test-connection
+
 # Test connection
 try:
     # The ping command is cheap and does not require auth.
@@ -65,18 +82,82 @@ except ConnectionFailure:
 ```
 
 ```{python}
-# Remove all existing documents
-launches.drop()
-launches.count_documents({})
+#| label: optional-drop-of-raw-collections
+#| eval: true
+
+# OPTIONAL: delete raw data
+launches_raw.drop()
+rockets_raw.drop()
+launchpads_raw.drop()
+
+print("launches_raw:", launches_raw.count_documents({}))
+print("rockets_raw:", rockets_raw.count_documents({}))
+print("launchpads_raw:", launchpads_raw.count_documents({}))
 ```
+
+```{python}
+#| label: loading-raw-data
+
+# Load raw launches data into launches_raw
+response = requests.get(LAUNCHES_URL)
+response.raise_for_status()
+
+launches_data = response.json()
+
+print(f"Launches downloaded: {len(launches_data)}")
+
+if launches_data:
+    launches_raw.insert_many(launches_data)
+
+print("Documents in launches_raw:", launches_raw.count_documents({}))
+
+# Load raw rockets data into rockets_raw
+response = requests.get(ROCKETS_URL)
+response.raise_for_status()
+
+rockets_data = response.json()
+
+print(f"Rockets downloaded: {len(rockets_data)}")
+
+if rockets_data:
+    rockets_raw.insert_many(rockets_data)
+
+print("Documents in rockets_raw:", rockets_raw.count_documents({}))
+
+# Load raw launchpads data into launchpads_raw
+response = requests.get(LAUNCHPADS_URL)
+response.raise_for_status()
+
+launchpads_data = response.json()
+
+print(f"Launch pads downloaded: {len(launchpads_data)}")
+
+if launchpads_data:
+    launchpads_raw.insert_many(launchpads_data)
+
+print("Documents in launchpads_raw:", launchpads_raw.count_documents({}))
+```
+
+```{python}
+#| label: sanity-check-raw-data
+
+# Quick sanity check
+print("launches_raw sample:")
+print(launches_raw.find_one({}, {"name": 1, "date_utc": 1, "rocket": 1, "launchpad": 1}))
+
+print("\nrockets_raw sample:")
+print(rockets_raw.find_one({}, {"name": 1, "cost_per_launch": 1, "success_rate_pct": 1}))
+
+print("\nlaunchpads_raw sample:")
+print(launchpads_raw.find_one({}, {"name": 1, "full_name": 1, "locality": 1, "region": 1}))
+```
+
+
+
 
 ## Extract
 
 ```{python}
-response = requests.get(API_URL)
 
-launches = response.json()
-
-print(len(launches))
 ```
 
