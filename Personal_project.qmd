@@ -1,0 +1,82 @@
+---
+title: "TBD"
+subtitle: "TBD"
+author: "Azeglio Martinelli"
+date: today
+number-sections: true
+number-depth: 3
+format:
+    pdf:
+        fontsize: 10pt
+---
+
+# Table of Contents
+
+# Summary
+
+# Requirements & Configuration
+
+
+```{python}
+import sys
+!{sys.executable} -m pip install -r requirements.txt
+
+import pymongo
+from pymongo.errors import ConnectionFailure
+import pprint as pp
+import pandas as pd
+import requests
+import json
+import time
+import string
+import os
+```
+
+```{python}
+# API and Database details
+#load_dotenv()
+API_URL = "https://api.spacexdata.com/v4/launches"
+CNX_STR = os.getenv("MONGO_URI")
+DB_NAME = "spacexdb"
+COLL_NAME = "launches"
+```
+
+
+#ELT Process
+
+## DB Setup
+
+```{python}
+# connection to MongoDB
+client = pymongo.MongoClient(CNX_STR)
+db = client[DB_NAME]
+launches = db[COLL_NAME]
+```
+
+```{python}
+# Test connection
+try:
+    # The ping command is cheap and does not require auth.
+    client.admin.command('ping')
+    print('Ping succesful!')
+    print(f"Available collections: : {(db.list_collection_names())}")
+except ConnectionFailure:
+    print("Server not available!")
+```
+
+```{python}
+# Remove all existing documents
+launches.drop()
+launches.count_documents({})
+```
+
+## Extract
+
+```{python}
+response = requests.get(API_URL)
+
+launches = response.json()
+
+print(len(launches))
+```
+
