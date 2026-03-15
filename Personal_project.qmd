@@ -243,9 +243,9 @@ print("Launches with empty/missing payloads:",
 #| label: optional-drop-of-stage-collections
 #| eval: false
 
-launches_stage.drop(db["launches_stage"])
-launchpads_stage.drop(db["launchpads_stage"])
-rockets_stage.drop(db["rockets_stage"])
+launches_stage.drop()
+launchpads_stage.drop()
+rockets_stage.drop()
 ```
 
 ```{python}
@@ -256,7 +256,9 @@ rockets_stage = db["rockets_stage"]
 pipeline = [
     {
         "$set": {
-            "_id": "$id"
+            "_id": "$id",
+            "first_flight_date": {"$dateFromString": {"dateString": "$first_flight"}}
+
         }
     },
     {
@@ -267,7 +269,7 @@ pipeline = [
             "success_rate_pct": 1,
             "country": 1,
             "company": 1,
-            "first_flight": 1
+            "first_flight_date": 1
         }
     },
     {
@@ -275,6 +277,7 @@ pipeline = [
     }
 ]
 
+list(rockets_raw.aggregate(pipeline))
 print(rockets_stage.count_documents({}))
 ```
 
@@ -287,7 +290,8 @@ launchpads_stage = db["launchpads_stage"]
 pipeline = [
     {
         "$set": {
-            "_id": "$id"
+            "_id": "$id",
+            "location": {"$concat": ["$locality", ", ", "$region"]}
         }
     },
     {
@@ -300,7 +304,8 @@ pipeline = [
             "latitude": 1,
             "longitude": 1,
             "launch_attempts": 1,
-            "launch_successes": 1
+            "launch_successes": 1,
+            "location": 1
         }
     },
     {
@@ -308,6 +313,7 @@ pipeline = [
     }
 ]
 
+list(launchpads_raw.aggregate(pipeline))
 print(launchpads_stage.count_documents({}))
 ```
 
@@ -319,19 +325,30 @@ launches_stage = db["launches_stage"]
 pipeline = [
     {
         "$set": {
-            "_id": "$id"
+            "_id": "$id",
+            "date": {"$dateFromString": {"dateString": "$date_utc"}}
+        }
+    },
+    {
+        "$set": {
+            "launch_year": {"$year": "$date"},
+            "core_count": {"$size": {"$ifNull": ["$cores", []]}},
+            "payload_count": {"$size": {"$ifNull": ["$payloads", []]}}
         }
     },
     {
         "$project": {
             "_id": 1,
             "name": 1,
-            "date_utc": 1,
+            "date": 1,
+            "launch_year": 1,
             "success": 1,
             "rocket": 1,
             "launchpad": 1,
             "cores": 1,
-            "payloads": 1
+            "payloads": 1,
+            "core_count": 1,
+            "payload_count": 1
         }
     },
     {
@@ -346,6 +363,7 @@ pipeline = [
     }
 ]
 
+list(launches_raw.aggregate(pipeline))
 print(launches_stage.count_documents({}))
 ```
 
