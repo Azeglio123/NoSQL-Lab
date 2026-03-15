@@ -83,7 +83,7 @@ except ConnectionFailure:
 
 ```{python}
 #| label: optional-drop-of-raw-collections
-#| eval: true
+#| eval: false
 
 # OPTIONAL: delete raw data
 launches_raw.drop()
@@ -94,6 +94,8 @@ print("launches_raw:", launches_raw.count_documents({}))
 print("rockets_raw:", rockets_raw.count_documents({}))
 print("launchpads_raw:", launchpads_raw.count_documents({}))
 ```
+
+## Extract & Load
 
 ```{python}
 #| label: loading-raw-data
@@ -152,12 +154,208 @@ print("\nlaunchpads_raw sample:")
 print(launchpads_raw.find_one({}, {"name": 1, "full_name": 1, "locality": 1, "region": 1}))
 ```
 
+```{python}
+#| label: check-null/missing
 
+important_fields = ["id", "name", "date_utc", "success", "rocket", "launchpad", "cores", "payloads"]
 
-
-## Extract
+for field in important_fields:
+    missing_or_null = launches_raw.count_documents({
+        "$or": [
+            {field: {"$exists": False}},
+            {field: None}
+        ]
+    })
+    print(f"{field}: {missing_or_null}")
+```
 
 ```{python}
+#| label: check-date-quality
 
+pp.pprint(list(launches_raw.aggregate([
+    {
+        "$project": {
+            "name": 1,
+            "date_utc": 1,
+            "date_type": {"$type": "$date_utc"}
+        }
+    },
+    {"$limit": 10}
+])))
 ```
+
+
+```{python}
+#| label: check-success-values
+
+pp.pprint(list(launches_raw.aggregate([
+    {
+        "$group": {
+            "_id": "$success",
+            "count": {"$sum": 1}
+        }
+    },
+    {"$sort": {"count": -1}}
+])))
+```
+
+```{python}
+#| label: inspect-array-sizes-of-cores-and-payloads
+
+pp.pprint(list(launches_raw.aggregate([
+    {
+        "$project": {
+            "name": 1,
+            "core_count": {"$size": {"$ifNull": ["$cores", []]}},
+            "payload_count": {"$size": {"$ifNull": ["$payloads", []]}}
+        }
+    },
+    {"$limit": 10}
+])))
+```
+
+```{python}
+#| label: inspect-array-sizes-of-cores-and-payloads
+
+pp.pprint(list(launches_raw.aggregate([
+    {
+        "$project": {
+            "name": 1,
+            "core_count": {"$size": {"$ifNull": ["$cores", []]}},
+            "payload_count": {"$size": {"$ifNull": ["$payloads", []]}}
+        }
+    },
+    {"$limit": 10}
+])))
+```
+
+```{python}
+#| label: check-launches-empty-arrays
+
+print("Launches with empty/missing cores:",
+      launches_raw.count_documents({
+          "$expr": {"$eq": [{"$size": {"$ifNull": ["$cores", []]}}, 0]}
+      }))
+
+print("Launches with empty/missing payloads:",
+      launches_raw.count_documents({
+          "$expr": {"$eq": [{"$size": {"$ifNull": ["$payloads", []]}}, 0]}
+      }))
+```
+
+
+
+## Transform
+
+```{python}
+#| label: optional-drop-of-stage-collections
+#| eval: false
+
+launches_stage.drop(db["launches_stage"])
+launchpads_stage.drop(db["launchpads_stage"])
+rockets_stage.drop(db["rockets_stage"])
+```
+
+```{python}
+#| label: stage-rockets
+
+rockets_stage = db["rockets_stage"]
+
+pipeline = [
+    {
+        "$set": {
+            "_id": "$id"
+        }
+    },
+    {
+        "$project": {
+            "_id": 1,
+            "name": 1,
+            "cost_per_launch": 1,
+            "success_rate_pct": 1,
+            "country": 1,
+            "company": 1,
+            "first_flight": 1
+        }
+    },
+    {
+        "$merge": "rockets_stage"
+    }
+]
+
+print(rockets_stage.count_documents({}))
+```
+
+
+```{python}
+#| label: stage-launchpads
+
+launchpads_stage = db["launchpads_stage"]
+
+pipeline = [
+    {
+        "$set": {
+            "_id": "$id"
+        }
+    },
+    {
+        "$project": {
+            "_id": 1,
+            "name": 1,
+            "full_name": 1,
+            "locality": 1,
+            "region": 1,
+            "latitude": 1,
+            "longitude": 1,
+            "launch_attempts": 1,
+            "launch_successes": 1
+        }
+    },
+    {
+        "$merge": "launchpads_stage"
+    }
+]
+
+print(launchpads_stage.count_documents({}))
+```
+
+```{python}
+#| label: stage-launches
+
+launches_stage = db["launches_stage"]
+
+pipeline = [
+    {
+        "$set": {
+            "_id": "$id"
+        }
+    },
+    {
+        "$project": {
+            "_id": 1,
+            "name": 1,
+            "date_utc": 1,
+            "success": 1,
+            "rocket": 1,
+            "launchpad": 1,
+            "cores": 1,
+            "payloads": 1
+        }
+    },
+    {
+        "$set": {
+            "launch_year": {"$year": {"$toDate": "$date_utc"}},
+            "payload_count": {"$size": "$payloads"},
+            "core_count": {"$size": "$cores"}
+        }
+    },
+    {
+        "$merge": "launches_stage"
+    }
+]
+
+print(launches_stage.count_documents({}))
+```
+
+
 
