@@ -5,13 +5,12 @@ author: "Azeglio Martinelli"
 date: today
 number-sections: true
 number-depth: 3
+toc: true
 format:
     pdf:
         fontsize: 10pt
         mermaid-format: mmd
 ---
-
-# Table of Contents
 
 # Summary
 
