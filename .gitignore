@@ -16,6 +16,7 @@ pymongo_course/
 # Quarto
 _site/
 .quarto/
+Personal_project_files/
 
 # Jupyter Notebook
 .ipynb_checkpoints/
