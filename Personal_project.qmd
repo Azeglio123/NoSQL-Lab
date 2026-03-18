@@ -237,7 +237,7 @@ print("Launches with empty/missing payloads:",
 ```
 
 
-## Transform & Staging
+## Data Cleaning & Transformation
 
 ```{python}
 #| label: optional-drop-of-stage-collections
@@ -361,4 +361,73 @@ print(launches_stage.count_documents({}))
 ```
 
 
+# Data Model
 
+
+# Analysis
+
+## Launch success rate by rocket
+
+```{python}
+#| label: launch-success-rate-by-rocket-type
+
+# Analysis 1: Launch success rate per rocket type
+pipeline_success_by_rocket = [
+    {
+        "$match": {
+            "success": {"$in": [True, False]}  # exclude null (upcoming)
+        }
+    },
+    {
+        "$lookup": {
+            "from": "rockets_stage",
+            "localField": "rocket",
+            "foreignField": "_id",
+            "as": "rocket_info"
+        }
+    },
+    {
+        "$unwind": "$rocket_info"
+    },
+    {
+        "$group": {
+            "_id": "$rocket_info.name",
+            "total_launches": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "cost_per_launch": {"$first": "$rocket_info.cost_per_launch"}
+        }
+    },
+    {
+        "$project": {
+            "_id": 0,
+            "rocket": "$_id",
+            "total_launches": 1,
+            "successful": 1,
+            "failed": 1,
+            "success_rate_pct": {
+                "$round": [
+                    {"$multiply": [
+                        {"$divide": ["$successful", "$total_launches"]},
+                        100
+                    ]},
+                    1
+                ]
+            },
+            "cost_per_launch": 1
+        }
+    },
+    {"$sort": {"total_launches": -1}}
+]
+
+results = list(launches_stage.aggregate(pipeline_success_by_rocket))
+df_success = pd.DataFrame(results)
+df_success
+
+```
+
+## Most active launchpads
+
+## Launch frequency over time
+
+## Core reuse analysis
