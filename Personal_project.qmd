@@ -19,6 +19,7 @@ format:
 
 ```{python}
 #| label: loading-imports
+#| output: false
 
 import sys
 !{sys.executable} -m pip install -r requirements.txt
