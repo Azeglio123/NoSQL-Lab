@@ -361,7 +361,63 @@ print(launches_stage.count_documents({}))
 ```
 
 
-# Data Model
+# Class Diagramm
+
+```{mermaid}
+classDiagram
+    class launches_stage {
+        +String _id
+        +String name
+        +Date date
+        +Int launch_year
+        +Boolean success
+        +String rocket
+        +String launchpad
+        +Int core_count
+        +Int payload_count
+        +CoreEmbed[] cores
+        +String[] payloads
+    }
+
+    class CoreEmbed {
+        +String core
+        +Int flight
+        +Boolean reused
+        +Boolean gridfins
+        +Boolean legs
+        +Boolean landing_attempt
+        +Boolean landing_success
+        +String landing_type
+        +String landpad
+    }
+
+    class rockets_stage {
+        +String _id
+        +String name
+        +Int cost_per_launch
+        +Float success_rate_pct
+        +String country
+        +String company
+        +Date first_flight_date
+    }
+
+    class launchpads_stage {
+        +String _id
+        +String name
+        +String full_name
+        +String locality
+        +String region
+        +Float latitude
+        +Float longitude
+        +Int launch_attempts
+        +Int launch_successes
+        +String location
+    }
+
+    launches_stage --> rockets_stage : rocket (ref)
+    launches_stage --> launchpads_stage : launchpad (ref)
+    launches_stage *-- CoreEmbed : cores (embedded array)
+```
 
 
 # Analysis
