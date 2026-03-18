@@ -8,6 +8,7 @@ number-depth: 3
 format:
     pdf:
         fontsize: 10pt
+        mermaid-format: mmd
 ---
 
 # Table of Contents
@@ -418,8 +419,8 @@ classDiagram
     launches_stage --> rockets_stage : rocket (ref)
     launches_stage --> launchpads_stage : launchpad (ref)
     launches_stage *-- CoreEmbed : cores (embedded array)
-```
 
+```
 
 # Analysis
 
