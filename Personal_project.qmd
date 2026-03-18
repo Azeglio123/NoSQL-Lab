@@ -480,4 +480,57 @@ df_yearly
 
 ## Launch frequency over time
 
+```{python}
+#| lable: core-reuse-analysis
+
+# Analysis 3: Booster reuse
+pipeline_core_reuse = [
+    {
+        "$unwind": "$cores"
+    },
+    {
+        "$match": {
+            "cores.core": {"$ne": None},
+            "cores.flight": {"$ne": None}
+        }
+    },
+    {
+        "$group": {
+            "_id": "$cores.core",
+            "total_flights": {"$max": "$cores.flight"},
+            "landing_attempts": {"$sum": {"$cond": [
+                {"$eq": ["$cores.landing_attempt", True]}, 1, 0
+            ]}},
+            "landing_successes": {"$sum": {"$cond": [
+                {"$eq": ["$cores.landing_success", True]}, 1, 0
+            ]}},
+            "landing_types": {"$addToSet": "$cores.landing_type"}
+        }
+    },
+    {
+        "$bucket": {
+            "groupBy": "$total_flights",
+            "boundaries": [1, 2, 3, 5, 8, 20],
+            "default": "20+",
+            "output": {
+                "core_count": {"$sum": 1},
+                "avg_landing_success": {"$avg": "$landing_successes"}
+            }
+        }
+    },
+    {
+        "$project": {
+            "_id": 0,
+            "flight_range": "$_id",
+            "core_count": 1,
+            "avg_landing_success": {"$round": ["$avg_landing_success", 1]}
+        }
+    }
+]
+
+results = list(launches_stage.aggregate(pipeline_core_reuse))
+df_reuse = pd.DataFrame(results)
+df_reuse
+```
+
 ## Core reuse analysis
