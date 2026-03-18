@@ -9,7 +9,6 @@ pymysql
 mysql-connector
 sqlalchemy
 requests
-json
 time
 string
 beautifulsoup4
