@@ -352,13 +352,6 @@ pipeline = [
         }
     },
     {
-        "$set": {
-            "launch_year": {"$year": {"$toDate": "$date_utc"}},
-            "payload_count": {"$size": "$payloads"},
-            "core_count": {"$size": "$cores"}
-        }
-    },
-    {
         "$merge": "launches_stage"
     }
 ]
