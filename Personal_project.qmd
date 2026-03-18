@@ -244,9 +244,14 @@ print("Launches with empty/missing payloads:",
 #| label: optional-drop-of-stage-collections
 #| eval: false
 
+# OPTIONAL: delete stage data
 launches_stage.drop()
 launchpads_stage.drop()
 rockets_stage.drop()
+
+print("launches_stage:", launches_stage.count_documents({}))
+print("rockets_stage:", rockets_stage.count_documents({}))
+print("launchpads_stage:", launchpads_stage.count_documents({}))
 ```
 
 ```{python}
