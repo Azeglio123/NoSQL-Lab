@@ -10,6 +10,10 @@ format:
     pdf:
         fontsize: 10pt
         mermaid-format: mmd
+        code-line-numbers: true
+        fig-pos: H
+        colorlinks: true
+        code-overflow: wrap
 ---
 
 # Summary
@@ -67,6 +71,10 @@ db = client[DB_NAME]
 launches_raw = db["launches_raw"]
 rockets_raw = db["rockets_raw"]
 launchpads_raw = db["launchpads_raw"]
+
+launches_stage = db["launches_stage"]
+rockets_stage = db["rockets_stage"]
+launchpads_stage = db["launchpads_stage"]
 ```
 
 ```{python}
@@ -76,8 +84,10 @@ launchpads_raw = db["launchpads_raw"]
 try:
     # The ping command is cheap and does not require auth.
     client.admin.command('ping')
-    print('Ping succesful!')
-    print(f"Available collections: : {(db.list_collection_names())}")
+    print('Ping successful!')
+    print("Available collections:")
+    for name in sorted(db.list_collection_names()):
+        print(f"  - {name}")
 except ConnectionFailure:
     print("Server not available!")
 ```
@@ -144,32 +154,54 @@ print("Documents in launchpads_raw:", launchpads_raw.count_documents({}))
 ## Data Inspection
 
 ```{python}
-#| label: sanity-check-raw-data
+# | label: sanity-check-raw-data
 
 # Quick sanity check
-print("launches_raw sample:")
-print(launches_raw.find_one({}, {"name": 1, "date_utc": 1, "rocket": 1, "launchpad": 1}))
-
-print("\nrockets_raw sample:")
-print(rockets_raw.find_one({}, {"name": 1, "cost_per_launch": 1, "success_rate_pct": 1}))
-
-print("\nlaunchpads_raw sample:")
-print(launchpads_raw.find_one({}, {"name": 1, "full_name": 1, "locality": 1, "region": 1}))
+for label, doc in [
+    (
+        "launches_raw",
+        launches_raw.find_one(
+            {}, {"_id": 0, "name": 1, "date_utc": 1, "rocket": 1, "launchpad": 1}
+        ),
+    ),
+    (
+        "rockets_raw",
+        rockets_raw.find_one(
+            {}, {"_id": 0, "name": 1, "cost_per_launch": 1, "success_rate_pct": 1}
+        ),
+    ),
+    (
+        "launchpads_raw",
+        launchpads_raw.find_one(
+            {}, {"_id": 0, "name": 1, "full_name": 1, "locality": 1, "region": 1}
+        ),
+    ),
+]:
+    print(f"{label}:")
+    for k, v in doc.items():
+        print(f"  {k}: {v}")
+    print()
 ```
 
 ```{python}
-#| label: check-null/missing
+# | label: check-null/missing
 
 # check for null/missing fields
-important_fields = ["id", "name", "date_utc", "success", "rocket", "launchpad", "cores", "payloads"]
+important_fields = [
+    "id",
+    "name",
+    "date_utc",
+    "success",
+    "rocket",
+    "launchpad",
+    "cores",
+    "payloads",
+]
 
 for field in important_fields:
-    missing_or_null = launches_raw.count_documents({
-        "$or": [
-            {field: {"$exists": False}},
-            {field: None}
-        ]
-    })
+    missing_or_null = launches_raw.count_documents(
+        {"$or": [{field: {"$exists": False}}, {field: None}]}
+    )
     print(f"{field}: {missing_or_null}")
 ```
 
@@ -370,6 +402,10 @@ print(launches_stage.count_documents({}))
 # Class Diagramm
 
 ```{mermaid}
+%%| label: class-diagramm
+%%| fig-width: 4
+%%| fig-height: 5
+
 classDiagram
     class launches_stage {
         +String _id
@@ -495,7 +531,7 @@ match = {"$match": {"success": {"$in": [True, False]}}}
 # group by launchpad and collect launch stats and active years
 group = {"$group": {
     "_id": "$launchpad",
-    "total_launches": {"$sum": 1},
+    "launches": {"$sum": 1},
     "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
     "years_active": {"$addToSet": "$launch_year"}
 }}
@@ -513,8 +549,8 @@ unwind = {"$unwind": "$pad_info"}
 
 # compute success rate and number of distinct years active
 add_fields = {"$addFields": {
-    "success_rate_pct": {"$round": [
-        {"$multiply": [{"$divide": ["$successful", "$total_launches"]}, 100]},
+    "success_rate": {"$round": [
+        {"$multiply": [{"$divide": ["$successful", "$launches"]}, 100]},
         1
     ]},
     "years_span": {"$size": "$years_active"}
@@ -523,16 +559,16 @@ add_fields = {"$addFields": {
 # clean up output fields and rename pad name and location
 project = {"$project": {
     "_id": 0,
-    "launchpad": "$pad_info.full_name",
+    "launchpad": "$pad_info.name",
     "location": "$pad_info.location",
-    "total_launches": 1,
+    "launches": 1,
     "successful": 1,
-    "success_rate_pct": 1,
+    "success_rate": 1,
     "years_span": 1
 }}
 
 # sort by most active launchpad first
-sort = {"$sort": {"total_launches": -1}}
+sort = {"$sort": {"launches": -1}}
 ```
 
 ```{python}
