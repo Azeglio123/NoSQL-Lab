@@ -55,6 +55,7 @@ DB_NAME = "spacexdb"
 LAUNCHES_URL = "https://api.spacexdata.com/v4/launches"
 ROCKETS_URL = "https://api.spacexdata.com/v4/rockets"
 LAUNCHPADS_URL = "https://api.spacexdata.com/v4/launchpads"
+LANDINGPADS_URL = "https://api.spacexdata.com/v4/landpads"
 
 # for images
 os.makedirs("Personal_project_files/images", exist_ok=True)
@@ -75,10 +76,12 @@ db = client[DB_NAME]
 launches_raw = db["launches_raw"]
 rockets_raw = db["rockets_raw"]
 launchpads_raw = db["launchpads_raw"]
+landingpads_raw = db["landingspads_raw"]
 
 launches_stage = db["launches_stage"]
 rockets_stage = db["rockets_stage"]
 launchpads_stage = db["launchpads_stage"]
+landingpads_stage = db["landingpads_stage"]
 ```
 
 ```{python}
@@ -103,10 +106,12 @@ except ConnectionFailure:
 launches_raw.drop()
 rockets_raw.drop()
 launchpads_raw.drop()
+landingpads_raw.drop()
 
 print("launches_raw:", launches_raw.count_documents({}))
 print("rockets_raw:", rockets_raw.count_documents({}))
 print("launchpads_raw:", launchpads_raw.count_documents({}))
+print("landingpads_raw:", landingpads_raw.count_documents({}))
 ```
 
 ## Raw Data Loading
@@ -152,6 +157,19 @@ if launchpads_data:
     launchpads_raw.insert_many(launchpads_data)
 
 print("Documents in launchpads_raw:", launchpads_raw.count_documents({}))
+
+# Load raw landingpads data into landingpads_raw
+response = requests.get(LANDINGPADS_URL)
+response.raise_for_status()
+
+landingpads_data = response.json()
+
+print(f"Launch pads downloaded: {len(landingpads_data)}")
+
+if landingpads_data:
+    landingpads_raw.insert_many(landingpads_data)
+
+print("Documents in landingpads_raw:", landingpads_raw.count_documents({}))
 ```
 
 ## Data Inspection
@@ -176,6 +194,12 @@ for label, doc in [
     (
         "launchpads_raw",
         launchpads_raw.find_one(
+            {}, {"_id": 0, "name": 1, "full_name": 1, "locality": 1, "region": 1}
+        ),
+    ),
+    (
+        "landingpads_raw",
+        landingpads_raw.find_one(
             {}, {"_id": 0, "name": 1, "full_name": 1, "locality": 1, "region": 1}
         ),
     ),
@@ -279,13 +303,15 @@ print("Launches with empty/missing payloads:",
 #| label: drop-of-stage-collections
 
 # OPTIONAL: delete stage data
-#launches_stage.drop()
+launches_stage.drop()
 launchpads_stage.drop()
-#rockets_stage.drop()
+rockets_stage.drop()
+landingpads_stage.drop()
 
 print("launches_stage:", launches_stage.count_documents({}))
 print("rockets_stage:", rockets_stage.count_documents({}))
 print("launchpads_stage:", launchpads_stage.count_documents({}))
+print("landinpads_stage:", landingpads_stage.count_documents({}))
 ```
 
 ```{python}
@@ -403,6 +429,45 @@ merge = {"$merge": "launches_stage"}
 pipeline = [set_date, set_derived, project, merge]
 list(launches_raw.aggregate(pipeline))
 print(launches_stage.count_documents({}))
+```
+
+```{python}
+#| label: stage-landingpads-pipeline
+
+landingpads_stage = db["landingpads_stage"]
+
+# rename id to _id and concatenate locality and region into a location string
+set_fields = {"$set": {
+    "_id": "$id",
+    "location": {"$concat": ["$locality", ", ", "$region"]}
+}}
+
+# keep only relevant fields
+project = {"$project": {
+    "_id": 1,
+    "name": 1,
+    "full_name": 1,
+    "type": 1,
+    "locality": 1,
+    "region": 1,
+    "latitude": 1,
+    "longitude": 1,
+    "landing_attempts": 1,
+    "landing_successes": 1,
+    "location": 1,
+    "status": 1
+}}
+
+# write results to landingpads_stage collection
+merge = {"$merge": "landingpads_stage"}
+```
+
+```{python}
+#| label: stage-landingpads-result
+
+pipeline = [set_fields, project, merge]
+list(landingpads_raw.aggregate(pipeline))
+print(landingpads_stage.count_documents({}))
 ```
 
 
@@ -630,6 +695,144 @@ cursor = launchpads_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
 
+```{python}
+#| label: most-active-launchpads-visual
+
+pipeline = [match_active, lookup, add_fields, add_fields2, project, sort]
+results = list(launchpads_stage.aggregate(pipeline))
+
+names = [r["launchpad"] for r in results]
+launches = [r["launches"] for r in results]
+successful = [r["successful"] for r in results]
+failed = [r["launches"] - r["successful"] for r in results]
+
+fig, ax = plt.subplots(figsize=(8, 4))
+
+# stacked bar: successful + failed
+bars_success = ax.barh(names, successful, color="#2ecc71", label="Successful")
+bars_failed = ax.barh(names, failed, left=successful, color="#e74c3c", label="Failed")
+
+# labels inside bars showing total launches
+for i, (name, total, rate) in enumerate(zip(names, launches, [r["success_rate"] for r in results])):
+    if total > 0:
+        ax.text(total + 0.5, i, f"{total} launches ({rate}%)",
+                va="center", ha="left", fontsize=9)
+
+ax.set_xlabel("Number of Launches")
+ax.set_title("Most Active SpaceX Launchpads")
+ax.set_xlim(0, max(launches) + 40)
+ax.invert_yaxis()
+ax.legend(loc="lower right")
+plt.tight_layout()
+plt.savefig("Personal_project_files/images/most_active_launchpads.png", dpi=150)
+plt.show()
+```
+
+![Most Active SpaceX Launchpads](Personal_project_files/images/most_active_launchpads.png){width=90%}
+
+## Landing success rate by landing pad type
+
+```{python}
+#| label: landing-success-rate-per-pad-pipeline
+
+# start from landingpads so all pads are always included
+match_all = {"$match": {"_id": {"$exists": True}}}
+
+# lookup all core entries that reference this landingpad
+lookup = {"$lookup": {
+    "from": "launches_stage",
+    "let": {"pad_id": "$_id"},
+    "pipeline": [
+        {"$unwind": "$cores"},
+        {"$match": {"$expr": {"$eq": ["$cores.landpad", "$$pad_id"]}}}
+    ],
+    "as": "core_landings"
+}}
+
+# compute landing attempts and successes from matched core entries
+add_fields = {"$addFields": {
+    "landing_attempts": {"$size": "$core_landings"},
+    "landing_successes": {
+        "$size": {
+            "$filter": {
+                "input": "$core_landings",
+                "as": "c",
+                "cond": {"$eq": ["$$c.cores.landing_success", True]}
+            }
+        }
+    }
+}}
+
+# compute landing success rate, guard against division by zero
+add_fields2 = {"$addFields": {
+    "landing_success_rate": {
+        "$cond": [
+            {"$gt": ["$landing_attempts", 0]},
+            {"$round": [
+                {"$multiply": [
+                    {"$divide": ["$landing_successes", "$landing_attempts"]},
+                    100
+                ]},
+                1
+            ]},
+            None
+        ]
+    }
+}}
+
+# clean up output fields
+project = {"$project": {
+    "_id": 0,
+    "landingpad": "$name",
+    "type": 1,
+    "location": 1,
+    "status": 1,
+    "landing_attempts": 1,
+    "landing_successes": 1,
+    "landing_success_rate": 1
+}}
+
+# sort by most attempted landingpad first
+sort = {"$sort": {"landing_attempts": -1}}
+```
+
+```{python}
+#| label: landing-success-rate-per-pad-result
+
+pipeline = [match_all, lookup, add_fields, add_fields2, project, sort]
+cursor = landingpads_stage.aggregate(pipeline)
+pd.DataFrame(cursor)
+```
+
+```{python}
+#| label: landing-success-rate-per-pad-visual
+
+pipeline = [match_all, lookup, add_fields, add_fields2, project, sort]
+results = [r for r in landingpads_stage.aggregate(pipeline) if r["landing_attempts"] > 0]
+
+names = [r["landingpad"] for r in results]
+success_rates = [r["landing_success_rate"] for r in results]
+attempts = [r["landing_attempts"] for r in results]
+
+fig, ax = plt.subplots(figsize=(8, 4))
+bars = ax.barh(names, success_rates, color=["#2ecc71" if r >= 90 else "#e67e22" if r >= 70 else "#e74c3c" for r in success_rates])
+
+for bar, attempt, rate in zip(bars, attempts, success_rates):
+    ax.text(bar.get_width() - 1, bar.get_y() + bar.get_height() / 2,
+            f"{rate}% ({attempt} attempts)", va="center", ha="right",
+            fontsize=9, color="white", fontweight="bold")
+
+ax.set_ylabel("Landing Pad")
+ax.set_xlabel("Landing Success Rate (%)")
+ax.set_title("Landing Success Rate per Landing Pad")
+ax.set_xlim(0, 100)
+ax.invert_yaxis()
+plt.tight_layout()
+plt.savefig("Personal_project_files/images/landing_success_per_pad.png", dpi=150)
+plt.show()
+```
+
+![Landing Success Rate per Landing Pad](Personal_project_files/images/landing_success_per_pad.png){width=90%}
 
 ## Launch frequency over time
 
@@ -800,3 +1003,107 @@ plt.show()
 ```
 
 ![Core Reuse Distribution](Personal_project_files/images/core_reuse.png){width=90%}
+
+
+## Fail rate
+
+```{python}
+#| label: landing-fail-rate-per-rocket-pipeline
+
+# only look at core entries where a landing was actually attempted
+unwind = {"$unwind": "$cores"}
+
+# exclude cores where no landing was attempted or rocket info is missing
+match = {"$match": {
+    "cores.landing_attempt": True,
+    "cores.landing_success": {"$in": [True, False]},
+    "rocket": {"$ne": None}
+}}
+
+# join rocket details to get the rocket name
+lookup = {"$lookup": {
+    "from": "rockets_stage",
+    "localField": "rocket",
+    "foreignField": "_id",
+    "as": "rocket_info"
+}}
+
+# flatten rocket_info array
+unwind2 = {"$unwind": "$rocket_info"}
+
+# group by rocket name and count landing attempts and failures
+group = {"$group": {
+    "_id": "$rocket_info.name",
+    "landing_attempts": {"$sum": 1},
+    "landing_failures": {"$sum": {
+        "$cond": [{"$eq": ["$cores.landing_success", False]}, 1, 0]
+    }},
+    "landing_successes": {"$sum": {
+        "$cond": [{"$eq": ["$cores.landing_success", True]}, 1, 0]
+    }}
+}}
+
+# compute landing fail rate
+add_fields = {"$addFields": {
+    "landing_fail_rate": {
+        "$round": [
+            {"$multiply": [
+                {"$divide": ["$landing_failures", "$landing_attempts"]},
+                100
+            ]},
+            1
+        ]
+    }
+}}
+
+# clean up output fields
+project = {"$project": {
+    "_id": 0,
+    "rocket": "$_id",
+    "landing_attempts": 1,
+    "landing_failures": 1,
+    "landing_successes": 1,
+    "landing_fail_rate": 1
+}}
+
+# sort by most attempts first
+sort = {"$sort": {"landing_attempts": -1}}
+```
+
+
+```{python}
+#| label: landing-fail-rate-per-rocket-result
+
+pipeline = [unwind, match, lookup, unwind2, group, add_fields, project, sort]
+cursor = launches_stage.aggregate(pipeline)
+pd.DataFrame(cursor)
+```
+
+```{python}
+#| label: landing-fail-rate-per-rocket-visual
+
+pipeline = [unwind, match, lookup, unwind2, group, add_fields, project, sort]
+results = list(launches_stage.aggregate(pipeline))
+
+rockets = [r["rocket"] for r in results]
+fail_rates = [r["landing_fail_rate"] for r in results]
+attempts = [r["landing_attempts"] for r in results]
+
+fig, ax = plt.subplots(figsize=(7, 3))
+bars = ax.bar(rockets, fail_rates,
+              color=["#e74c3c" if r > 20 else "#e67e22" if r > 10 else "#2ecc71" for r in fail_rates])
+
+for bar, attempt, rate in zip(bars, attempts, fail_rates):
+    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
+            f"{rate}%\n({attempt} attempts)", ha="center", va="bottom", fontsize=9)
+
+ax.set_ylabel("Landing Fail Rate (%)")
+ax.set_xlabel("Rocket Type")
+ax.set_title("Landing Fail Rate per Rocket Type")
+ax.set_ylim(0, max(fail_rates) + 15)
+plt.tight_layout()
+plt.savefig("Personal_project_files/images/landing_fail_rate.png", dpi=150)
+plt.show()
+```
+
+![Landing Fail Rate per Rocket Type](Personal_project_files/images/landing_fail_rate.png){width=90%}
