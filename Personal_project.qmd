@@ -431,235 +431,222 @@ classDiagram
 ## Launch success rate by rocket
 
 ```{python}
-#| label: launch-success-rate-by-rocket-type
+#| label: launch-success-rate-by-rocket-type-pipeline
 
-# Analysis 1: Launch success rate per rocket type
-pipeline_success_by_rocket = [
-    {
-        "$match": {
-            "success": {"$in": [True, False]}  # exclude null (upcoming)
-        }
-    },
-    {
-        "$lookup": {
-            "from": "rockets_stage",
-            "localField": "rocket",
-            "foreignField": "_id",
-            "as": "rocket_info"
-        }
-    },
-    {
-        "$unwind": "$rocket_info"
-    },
-    {
-        "$group": {
-            "_id": "$rocket_info.name",
-            "total_launches": {"$sum": 1},
-            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
-            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
-            "cost_per_launch": {"$first": "$rocket_info.cost_per_launch"}
-        }
-    },
-    {
-        "$project": {
-            "_id": 0,
-            "rocket": "$_id",
-            "total_launches": 1,
-            "successful": 1,
-            "failed": 1,
-            "success_rate_pct": {
-                "$round": [
-                    {"$multiply": [
-                        {"$divide": ["$successful", "$total_launches"]},
-                        100
-                    ]},
-                    1
-                ]
-            },
-            "cost_per_launch": 1
-        }
-    },
-    {"$sort": {"total_launches": -1}}
-]
+# exclude upcoming launches without a result
+match = {"$match": {"success": {"$in": [True, False]}}}
 
-results = list(launches_stage.aggregate(pipeline_success_by_rocket))
-df_success = pd.DataFrame(results)
-df_success
+# join rocket details from rockets_stage by rocket id
+lookup = {"$lookup": {
+    "from": "rockets_stage",
+    "localField": "rocket",
+    "foreignField": "_id",
+    "as": "rocket_info"
+}}
+
+# flatten rocket_info array into a single object
+unwind = {"$unwind": "$rocket_info"}
+
+# group by rocket name and count launches, successes, failures
+group = {"$group": {
+    "_id": "$rocket_info.name",
+    "total_launches": {"$sum": 1},
+    "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+    "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+    "cost_per_launch": {"$first": "$rocket_info.cost_per_launch"}
+}}
+
+# calculate success rate and clean up output fields
+project = {"$project": {
+    "_id": 0,
+    "rocket": "$_id",
+    "total_launches": 1,
+    "successful": 1,
+    "failed": 1,
+    "success_rate_pct": {"$round": [
+        {"$multiply": [{"$divide": ["$successful", "$total_launches"]}, 100]},
+        1
+    ]},
+    "cost_per_launch": 1
+}}
+
+# sort by most launched rocket first
+sort = {"$sort": {"total_launches": -1}}
 
 ```
+
+```{python}
+#| label: launch-success-rate-by-rocket-type-result
+
+pipeline = [match, lookup, unwind, group, project, sort]
+cursor = launches_stage.aggregate(pipeline)
+pd.DataFrame(cursor)
+```
+
 
 ## Most active launchpads
 
 ```{python}
-#| label: most-active-launchpads
+#| label: most-active-launchpads-pipeline
 
-# Analysis 4: Launchpad performance
-pipeline_launchpad_perf = [
-    {
-        "$match": {
-            "success": {"$in": [True, False]}
-        }
-    },
-    {
-        "$group": {
-            "_id": "$launchpad",
-            "total_launches": {"$sum": 1},
-            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
-            "years_active": {"$addToSet": "$launch_year"}
-        }
-    },
-    {
-        "$lookup": {
-            "from": "launchpads_stage",
-            "localField": "_id",
-            "foreignField": "_id",
-            "as": "pad_info"
-        }
-    },
-    {
-        "$unwind": "$pad_info"
-    },
-    {
-        "$addFields": {
-            "success_rate_pct": {
-                "$round": [
-                    {"$multiply": [
-                        {"$divide": ["$successful", "$total_launches"]},
-                        100
-                    ]},
-                    1
-                ]
-            },
-            "years_span": {"$size": "$years_active"}
-        }
-    },
-    {
-        "$project": {
-            "_id": 0,
-            "launchpad": "$pad_info.full_name",
-            "location": "$pad_info.location",
-            "total_launches": 1,
-            "successful": 1,
-            "success_rate_pct": 1,
-            "years_span": 1
-        }
-    },
-    {"$sort": {"total_launches": -1}}
-]
+# exclude upcoming launches without a result
+match = {"$match": {"success": {"$in": [True, False]}}}
 
-results = list(launches_stage.aggregate(pipeline_launchpad_perf))
-df_pads = pd.DataFrame(results)
-df_pads
+# group by launchpad and collect launch stats and active years
+group = {"$group": {
+    "_id": "$launchpad",
+    "total_launches": {"$sum": 1},
+    "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+    "years_active": {"$addToSet": "$launch_year"}
+}}
+
+# join launchpad details from launchpads_stage by id
+lookup = {"$lookup": {
+    "from": "launchpads_stage",
+    "localField": "_id",
+    "foreignField": "_id",
+    "as": "pad_info"
+}}
+
+# flatten pad_info array into a single object
+unwind = {"$unwind": "$pad_info"}
+
+# compute success rate and number of distinct years active
+add_fields = {"$addFields": {
+    "success_rate_pct": {"$round": [
+        {"$multiply": [{"$divide": ["$successful", "$total_launches"]}, 100]},
+        1
+    ]},
+    "years_span": {"$size": "$years_active"}
+}}
+
+# clean up output fields and rename pad name and location
+project = {"$project": {
+    "_id": 0,
+    "launchpad": "$pad_info.full_name",
+    "location": "$pad_info.location",
+    "total_launches": 1,
+    "successful": 1,
+    "success_rate_pct": 1,
+    "years_span": 1
+}}
+
+# sort by most active launchpad first
+sort = {"$sort": {"total_launches": -1}}
 ```
+
+```{python}
+#| label: most-active-launchpads-result
+
+pipeline = [match, group, lookup, unwind, add_fields, project, sort]
+cursor = launches_stage.aggregate(pipeline)
+pd.DataFrame(cursor)
+```
+
 
 ## Launch frequency over time
 
 ```{python}
-#| label: launch-frequency-and-success-trend-per-year
+#| label: launch-frequency-over-time-pipeline
 
-# Analysis 2: Launch frequency and success trend per year
-pipeline_yearly_trend = [
-    {
-        "$match": {
-            "success": {"$in": [True, False]}
-        }
-    },
-    {
-        "$group": {
-            "_id": "$launch_year",
-            "total": {"$sum": 1},
-            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
-            "failed": {"$sum": {"$cond": ["$success", 0, 1]}}
-        }
-    },
-    {
-        "$addFields": {
-            "success_rate_pct": {
-                "$round": [
-                    {"$multiply": [
-                        {"$divide": ["$successful", "$total"]},
-                        100
-                    ]},
-                    1
-                ]
-            }
-        }
-    },
-    {"$sort": {"_id": 1}},
-    {
-        "$project": {
-            "_id": 0,
-            "year": "$_id",
-            "total": 1,
-            "successful": 1,
-            "failed": 1,
-            "success_rate_pct": 1
-        }
-    }
-]
+# exclude upcoming launches without a result
+match = {"$match": {"success": {"$in": [True, False]}}}
 
-results = list(launches_stage.aggregate(pipeline_yearly_trend))
-df_yearly = pd.DataFrame(results)
-df_yearly
+# group by year and count total, successful and failed launches
+group = {"$group": {
+    "_id": "$launch_year",
+    "total": {"$sum": 1},
+    "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+    "failed": {"$sum": {"$cond": ["$success", 0, 1]}}
+}}
+
+# compute success rate per year
+add_fields = {"$addFields": {
+    "success_rate_pct": {"$round": [
+        {"$multiply": [{"$divide": ["$successful", "$total"]}, 100]},
+        1
+    ]}
+}}
+
+# sort chronologically
+sort = {"$sort": {"_id": 1}}
+
+# rename _id to year and clean up output fields
+project = {"$project": {
+    "_id": 0,
+    "year": "$_id",
+    "total": 1,
+    "successful": 1,
+    "failed": 1,
+    "success_rate_pct": 1
+}}
 
 ```
+
+```{python}
+#| label: launch-frequency-over-time-result
+
+pipeline = [match, group, add_fields, sort, project]
+cursor = launches_stage.aggregate(pipeline)
+pd.DataFrame(cursor)
+```
+
+
 
 ## Core reuse analysis
 
 ```{python}
-#| lable: core-reuse-analysis
+#| label: core-reuse-analysis-pipelines
 
-# Analysis 3: Booster reuse
-pipeline_core_reuse = [
-    {
-        "$unwind": "$cores"
-    },
-    {
-        "$match": {
-            "cores.core": {"$ne": None},
-            "cores.flight": {"$ne": None}
-        }
-    },
-    {
-        "$group": {
-            "_id": "$cores.core",
-            "total_flights": {"$max": "$cores.flight"},
-            "landing_attempts": {"$sum": {"$cond": [
-                {"$eq": ["$cores.landing_attempt", True]}, 1, 0
-            ]}},
-            "landing_successes": {"$sum": {"$cond": [
-                {"$eq": ["$cores.landing_success", True]}, 1, 0
-            ]}},
-            "landing_types": {"$addToSet": "$cores.landing_type"}
-        }
-    },
-    {
-        "$bucket": {
-            "groupBy": "$total_flights",
-            "boundaries": [1, 2, 3, 5, 8, 20],
-            "default": "20+",
-            "output": {
-                "core_count": {"$sum": 1},
-                "avg_landing_success": {"$avg": "$landing_successes"}
-            }
-        }
-    },
-    {
-        "$project": {
-            "_id": 0,
-            "flight_range": "$_id",
-            "core_count": 1,
-            "avg_landing_success": {"$round": ["$avg_landing_success", 1]}
-        }
+# unwind cores array so each core entry becomes its own document
+unwind = {"$unwind": "$cores"}
+
+# exclude entries where core id or flight number is missing
+match = {"$match": {
+    "cores.core": {"$ne": None},
+    "cores.flight": {"$ne": None}
+}}
+
+# group by core id and collect flight and landing stats
+group = {"$group": {
+    "_id": "$cores.core",
+    "total_flights": {"$max": "$cores.flight"},
+    "landing_attempts": {"$sum": {"$cond": [
+        {"$eq": ["$cores.landing_attempt", True]}, 1, 0
+    ]}},
+    "landing_successes": {"$sum": {"$cond": [
+        {"$eq": ["$cores.landing_success", True]}, 1, 0
+    ]}},
+    "landing_types": {"$addToSet": "$cores.landing_type"}
+}}
+
+# bucket cores by number of total flights to see reuse distribution
+bucket = {"$bucket": {
+    "groupBy": "$total_flights",
+    "boundaries": [1, 2, 3, 5, 8, 20],
+    "default": "20+",
+    "output": {
+        "core_count": {"$sum": 1},
+        "avg_landing_success": {"$avg": "$landing_successes"}
     }
-]
+}}
 
-results = list(launches_stage.aggregate(pipeline_core_reuse))
-df_reuse = pd.DataFrame(results)
-df_reuse
+# rename _id to flight_range and round average landing successes
+project = {"$project": {
+    "_id": 0,
+    "flight_range": "$_id",
+    "core_count": 1,
+    "avg_landing_success": {"$round": ["$avg_landing_success", 1]}
+}}
 ```
 
+```{python}
+#| label: core-reuse-analysis-result
 
+pipeline = [unwind, match, group, bucket, project]
+cursor = launches_stage.aggregate(pipeline)
+pd.DataFrame(cursor)
+```
 
 
 
