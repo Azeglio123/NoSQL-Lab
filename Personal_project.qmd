@@ -37,6 +37,7 @@ import json
 import time
 import string
 import os
+import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 ```
 
@@ -54,6 +55,9 @@ DB_NAME = "spacexdb"
 LAUNCHES_URL = "https://api.spacexdata.com/v4/launches"
 ROCKETS_URL = "https://api.spacexdata.com/v4/rockets"
 LAUNCHPADS_URL = "https://api.spacexdata.com/v4/launchpads"
+
+# for images
+os.makedirs("Personal_project_files/images", exist_ok=True)
 ```
 
 
@@ -93,8 +97,7 @@ except ConnectionFailure:
 ```
 
 ```{python}
-#| label: optional-drop-of-raw-collections
-#| eval: false
+#| label: drop-of-raw-collections
 
 # OPTIONAL: delete raw data
 launches_raw.drop()
@@ -273,8 +276,7 @@ print("Launches with empty/missing payloads:",
 ## Data Cleaning & Transformation
 
 ```{python}
-#| label: optional-drop-of-stage-collections
-#| eval: false
+#| label: drop-of-stage-collections
 
 # OPTIONAL: delete stage data
 #launches_stage.drop()
@@ -524,11 +526,35 @@ cursor = launches_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
 
+```{python}
+#| label: launch-success-rate-by-rocket-visual
+
+pipeline = [match, lookup, unwind, group, project, sort]
+results = list(launches_stage.aggregate(pipeline))
+
+rockets = [r["rocket"] for r in results]
+success_rates = [r["success_rate_pct"] for r in results]
+total_launches = [r["total_launches"] for r in results]
+
+fig, ax = plt.subplots(figsize=(8, 3))
+bars = ax.barh(rockets, success_rates, color=["#2ecc71" if r >= 90 else "#e67e22" if r >= 70 else "#e74c3c" for r in success_rates])
+
+for bar, total, rate in zip(bars, total_launches, success_rates):
+    ax.text(bar.get_width() - 1, bar.get_y() + bar.get_height() / 2,
+            f"{rate}% ({total} launches)", va="center", ha="right", fontsize=9, color="white", fontweight="bold")
+
+ax.set_xlabel("Success Rate (%)")
+ax.set_title("Launch Success Rate by Rocket")
+ax.set_xlim(0, 100)
+ax.invert_yaxis()
+plt.tight_layout()
+plt.savefig("Personal_project_files/images/success_by_rocket.png", dpi=150)
+plt.show()
+```
+
+![Launch Success Rate by Rocket](Personal_project_files/images/success_by_rocket.png){width=90%}
 
 ## Most active launchpads
-
-
-
 
 ```{python}
 #| label: most-active-launchpads-pipeline
@@ -605,7 +631,6 @@ pd.DataFrame(cursor)
 ```
 
 
-
 ## Launch frequency over time
 
 ```{python}
@@ -653,6 +678,41 @@ cursor = launches_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
 
+```{python}
+#| label: launch-frequency-over-time-visual
+
+pipeline = [match, group, add_fields, sort, project]
+results = list(launches_stage.aggregate(pipeline))
+
+years = [r["year"] for r in results]
+totals = [r["total"] for r in results]
+success_rates = [r["success_rate_pct"] for r in results]
+
+fig, ax1 = plt.subplots(figsize=(10, 4))
+
+# bar chart for total launches
+ax1.bar(years, totals, color="#3498db", alpha=0.7, label="Total Launches")
+ax1.set_xlabel("Year")
+ax1.set_xticks(range(min(years), max(years) + 1))
+ax1.set_xticklabels([str(y) for y in range(min(years), max(years) + 1)], rotation=45, ha="right")
+ax1.set_ylabel("Number of Launches", color="#3498db")
+ax1.tick_params(axis="y", labelcolor="#3498db")
+
+# line chart for success rate on second y-axis
+ax2 = ax1.twinx()
+ax2.plot(years, success_rates, color="#e74c3c", marker="o", linewidth=2, label="Success Rate %")
+ax2.set_ylabel("Success Rate (%)", color="#e74c3c")
+ax2.tick_params(axis="y", labelcolor="#e74c3c")
+ax2.set_ylim(0, 110)
+
+ax1.set_title("Launch Frequency and Success Rate Over Time")
+fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.95))
+plt.tight_layout()
+plt.savefig("Personal_project_files/images/launch_frequency.png", dpi=150)
+plt.show()
+```
+
+![Launch Frequency and Success Rate Over Time](Personal_project_files/images/launch_frequency.png){width=90%}
 
 
 ## Core reuse analysis
@@ -710,6 +770,33 @@ cursor = launches_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
 
+```{python}
+#| label: core-reuse-visual
 
+pipeline = [unwind, match, group, bucket, project]
+results = list(launches_stage.aggregate(pipeline))
 
+labels = [str(r["flight_range"]) for r in results]
+core_counts = [r["core_count"] for r in results]
+avg_landings = [r["avg_landing_success"] for r in results]
 
+fig, ax1 = plt.subplots(figsize=(8, 4))
+
+bars = ax1.bar(labels, core_counts, color="#9b59b6", alpha=0.8, label="Number of Cores")
+ax1.set_xlabel("Number of Flights (reuse bucket)")
+ax1.set_ylabel("Number of Cores", color="#9b59b6")
+ax1.tick_params(axis="y", labelcolor="#9b59b6")
+
+ax2 = ax1.twinx()
+ax2.plot(labels, avg_landings, color="#f39c12", marker="o", linewidth=2, label="Avg Landing Successes")
+ax2.set_ylabel("Avg Landing Successes", color="#f39c12")
+ax2.tick_params(axis="y", labelcolor="#f39c12")
+
+ax1.set_title("Core Reuse Distribution and Landing Success")
+fig.legend(loc="upper right", bbox_to_anchor=(0.95, 0.95))
+plt.tight_layout()
+plt.savefig("Personal_project_files/images/core_reuse.png", dpi=150)
+plt.show()
+```
+
+![Core Reuse Distribution](Personal_project_files/images/core_reuse.png){width=90%}
