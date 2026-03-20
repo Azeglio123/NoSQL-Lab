@@ -18,6 +18,13 @@ format:
 
 # Summary
 
+
+# Research Questions
+
+1. How has SpaceX's launch success rate evolved over time, and which rocket types are most reliable?
+2. Which launch sites are most active, and how does location affect launch success?
+3. How successful is SpaceX at recovering rocket boosters, and which landing infrastructure performs best?
+
 # Requirements & Configuration
 
 
