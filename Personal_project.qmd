@@ -1,6 +1,6 @@
 ---
-title: "TBD"
-subtitle: "TBD"
+title: "SpaceX Mission Analytics: Launches, Landings and Reusability"
+subtitle: "A MongoDB & Python Analysis of the SpaceX REST API"
 author: "Azeglio Martinelli"
 date: today
 number-sections: true
