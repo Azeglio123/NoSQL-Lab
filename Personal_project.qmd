@@ -49,8 +49,6 @@ import time
 import string
 import os
 import matplotlib.pyplot as plt
-# to render labels correctly: use a regular ASCII hyphen
-plt.rcParams['axes.unicode_minus'] = False
 from dotenv import load_dotenv
 ```
 
@@ -1298,3 +1296,8 @@ plt.show()
 ```
 
 The bar chart shows that Falcon 9 has a landing fail rate of only 7.2% across 152 attempts. Meaning 141 out of 152 boosters were successfully recovered. Falcon Heavy, with just 9 landing attempts, has a notably higher fail rate of 22.2%. The higher Falcon Heavy rate is partly explained by the complexity of recovering three boosters per mission and the smaller sample size. The colour coding (green for Falcon 9, red for Falcon Heavy) draws attention to this disparity. Nevertheless, both rates are impressive given that routine orbital-class booster recovery was considered impractical before SpaceX pioneered it.
+
+# Conclusion
+
+# Learnings
+
