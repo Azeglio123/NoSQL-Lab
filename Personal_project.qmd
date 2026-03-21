@@ -626,9 +626,10 @@ No cores store `landpad` as an array, confirming that the field is always either
 The class diagram below visualizes the structure of the staged data as it is stored in MongoDB. It shows the four collections used in this project, their fields and data types, as well as the relationships between them.
 
 ```{mermaid}
-%%| label: class-diagramm
+%%| label: fig-classdiagram
 %%| fig-width: 4
 %%| fig-height: 5
+%%| fig-cap: "Class Diagram of Staged SpaceX Data"
 
 classDiagram
 class launches_stage {
@@ -706,6 +707,8 @@ Every launch contains an embedded array of `CoreEmbed` objects representing the 
 
 ## Launch success rate by rocket
 
+This pipeline begins by filtering out any launches that lack a definitive outcome (success is either `True` or `False`). It then performs a `$lookup` to join each launch with its corresponding rocket document from `rockets_stage`, using the string ID stored in the rocket field. After flattening the joined array with `$unwind`, the pipeline groups all launches by rocket name and counts total launches, successes, and failures. A `$project` stage computes the success rate as a percentage (rounded to one decimal), and the results are sorted in descending order by total launches. This pipeline demonstrates the use of `$lookup` for cross-collection joins, `$cond` for conditional counting, and arithmetic operators (`$divide`, `$multiply`, `$round`) for derived metrics.
+
 ```{python}
 #| label: launch-success-rate-by-rocket-type-pipeline
 
@@ -752,7 +755,8 @@ sort = {"$sort": {"total_launches": -1}}
 ```
 
 ```{python}
-#| label: launch-success-rate-by-rocket-type-result
+#| label: tbl-launch-success-rate-by-rocket-type-result
+#| tbl-cap: "Launch Success Rate by Rocket"
 
 pipeline = [match, lookup, unwind, group, project, sort]
 cursor = launches_stage.aggregate(pipeline)
@@ -760,7 +764,9 @@ pd.DataFrame(cursor)
 ```
 
 ```{python}
-#| label: launch-success-rate-by-rocket-visual
+#| label: fig-launch-success-rate-by-rocket
+#| fig-cap: "Launch Success Rate by Rocket"
+#| fig-width: 90%
 
 pipeline = [match, lookup, unwind, group, project, sort]
 results = list(launches_stage.aggregate(pipeline))
@@ -777,7 +783,6 @@ for bar, total, rate in zip(bars, total_launches, success_rates):
             f"{rate}% ({total} launches)", va="center", ha="right", fontsize=9, color="white", fontweight="bold")
 
 ax.set_xlabel("Success Rate (%)")
-ax.set_title("Launch Success Rate by Rocket")
 ax.set_xlim(0, 100)
 ax.invert_yaxis()
 plt.tight_layout()
@@ -785,9 +790,11 @@ plt.savefig("Personal_project_files/images/success_by_rocket.png", dpi=150)
 plt.show()
 ```
 
-![Launch Success Rate by Rocket](Personal_project_files/images/success_by_rocket.png){width=90%}
+The horizontal bar chart reveals that Falcon 9 dominates SpaceX's launch history with 178 missions and an exceptional 98.9% success rate. The rocket has only 2 failures across its entire operational life. Falcon Heavy, while still in its early phase with just 3 launches, holds a perfect 100% record. Falcon 1, SpaceX's first orbital rocket, succeeded only 2 out of 5 times, reflecting the steep learning curve of the company's early years. The colour coding, green for ≥ 90%, orange for ≥ 70%, red below, makes it immediately clear that SpaceX's current fleet is extraordinarily reliable.
 
 ## Most active launchpads
+
+Unlike the previous pipeline, this one starts from the `launchpads_stage` collection to ensure that even launchpads with zero launches appear in the output. A `$lookup` brings in all matching launches, and `$addFields` computes three derived values: the total number of launches, the number of successful launches using `$filter` and `$size`, and the set of distinct active years. A second `$addFields` stage calculates the success rate with a guard against division by zero and counts the years span. The final `$project` and `$sort` stages clean up the output and rank launchpads by activity. This pipeline showcases `$filter` for array-level conditional logic and `$setUnion` for extracting unique values from nested arrays.
 
 ```{python}
 #| label: most-active-launchpads-pipeline
@@ -856,7 +863,8 @@ sort = {"$sort": {"launches": -1}}
 ```
 
 ```{python}
-#| label: most-active-launchpads-result
+#| label: tbl-most-active-launchpads-result
+#| tbl-cap: "Most Active SpaceX Launchpads"
 
 pipeline = [match_active, lookup, add_fields, add_fields2, project, sort]
 cursor = launchpads_stage.aggregate(pipeline)
@@ -864,7 +872,9 @@ pd.DataFrame(cursor)
 ```
 
 ```{python}
-#| label: most-active-launchpads-visual
+#| label: fig-most-active-launchpads
+#| fig-cap: "Most Active SpaceX Launchpads"
+#| fig-width: 90%
 
 pipeline = [match_active, lookup, add_fields, add_fields2, project, sort]
 results = list(launchpads_stage.aggregate(pipeline))
@@ -887,18 +897,18 @@ for i, (name, total, rate) in enumerate(zip(names, launches, [r["success_rate"] 
                 va="center", ha="left", fontsize=9)
 
 ax.set_xlabel("Number of Launches")
-ax.set_title("Most Active SpaceX Launchpads")
 ax.set_xlim(0, max(launches) + 40)
 ax.invert_yaxis()
 ax.legend(loc="lower right")
 plt.tight_layout()
-plt.savefig("Personal_project_files/images/most_active_launchpads.png", dpi=150)
 plt.show()
 ```
 
-![Most Active SpaceX Launchpads](Personal_project_files/images/most_active_launchpads.png){width=90%}
+The stacked bar chart shows that CCSFS SLC 40 in Florida is SpaceX's workhorse facility with 99 launches and a 98% success rate. Its 2 failures are the only blemishes across all active US-mainland pads. KSC LC 39A and VAFB SLC 4E both maintain flawless 100% records with 55 and 27 launches respectively. Kwajalein Atoll stands out as the sole non-continental site with a low 40% success rate across 5 early Falcon 1 missions. VAFB SLC 3W (retired, zero launches) and STLS (under construction) confirm that SpaceX's operational launch capacity is currently concentrated across three active Florida and California sites.
 
 ## Landing success rate by landing pad type
+
+This pipeline starts from landingpads_stage and uses an advanced `$lookup` with a sub-pipeline: it unwinds the cores array inside each launch document and matches only those core entries whose landpad field equals the current landing pad's `_id`. This approach directly links individual booster landing events to their target pads. Two `$addFields` stages then compute landing attempts, successes, and the success rate, again with a guard against division by zero. The output is projected with pad name, `type` (ASDS or RTLS), `location`, and `status`, then sorted by attempts. This pipeline is notable for its use of the correlated sub-pipeline form of `$lookup` with let and `$expr`, which enables filtering inside the joined collection before results are returned.
 
 ```{python}
 #| label: landing-success-rate-per-pad-pipeline
@@ -965,7 +975,8 @@ sort = {"$sort": {"landing_attempts": -1}}
 ```
 
 ```{python}
-#| label: landing-success-rate-per-pad-result
+#| label: tbl-landing-success-rate-per-pad-result
+#| tbl-cap: "Landing success Rate per Landing Pad"
 
 pipeline = [match_all, lookup, add_fields, add_fields2, project, sort]
 cursor = landingpads_stage.aggregate(pipeline)
@@ -973,7 +984,9 @@ pd.DataFrame(cursor)
 ```
 
 ```{python}
-#| label: landing-success-rate-per-pad-visual
+#| label: fig-landing-success-rate-per-pad
+#| fig-cap: "Landing Success Rate per Landing Pad"
+#| fig-width: 90%
 
 pipeline = [match_all, lookup, add_fields, add_fields2, project, sort]
 results = [r for r in landingpads_stage.aggregate(pipeline) if r["landing_attempts"] > 0]
@@ -992,7 +1005,6 @@ for bar, attempt, rate in zip(bars, attempts, success_rates):
 
 ax.set_ylabel("Landing Pad")
 ax.set_xlabel("Landing Success Rate (%)")
-ax.set_title("Landing Success Rate per Landing Pad")
 ax.set_xlim(0, 100)
 ax.invert_yaxis()
 plt.tight_layout()
@@ -1000,9 +1012,11 @@ plt.savefig("Personal_project_files/images/landing_success_per_pad.png", dpi=150
 plt.show()
 ```
 
-![Landing Success Rate per Landing Pad](Personal_project_files/images/landing_success_per_pad.png){width=90%}
+The chart confirms an intuitive pattern: land-based recovery (RTLS) is more reliable than sea-based recovery (ASDS). LZ-2, LZ-4, and ASOG all achieve a perfect 100% landing rate, while LZ-1 is close behind at 95.2%. Among the drone ships, JRTI performs best at 97.5%, whereas OCISLY, despite being the most-used pad with 63 attempts, has the lowest active-pad success rate at 85.7%, accounting for the majority of SpaceX's landing failures. The retired JRTI-1, with 0 out of 2 successes, reflects the experimental early days of autonomous ship landings. Overall, SpaceX's landing infrastructure has matured to a remarkably high standard across both platforms.
 
 ## Launch frequency over time
+
+This pipeline groups all valid launches by their pre-computed `launch_year` field, counting totals, successes, and failures per year using `$group` with conditional `$sum` expressions. An `$addFields` stage derives the annual success rate, and the results are sorted chronologically. A final `$project` renames `_id` to year for readability. Although structurally simpler than the cross-collection pipelines, this aggregation is effective for time-series analysis and demonstrates how pre-computed fields simplify downstream aggregations.
 
 ```{python}
 #| label: launch-frequency-over-time-pipeline
@@ -1042,7 +1056,8 @@ project = {"$project": {
 ```
 
 ```{python}
-#| label: launch-frequency-over-time-result
+#| label: tbl-launch-frequency-over-time-result
+#| tbl-cap: "Launch Frequency and Success Rate Over Time"
 
 pipeline = [match, group, add_fields, sort, project]
 cursor = launches_stage.aggregate(pipeline)
@@ -1050,7 +1065,9 @@ pd.DataFrame(cursor)
 ```
 
 ```{python}
-#| label: launch-frequency-over-time-visual
+#| label: fig-launch-frequency-over-time
+#| fig-cap: "Launch Frequency and Success Rate Over Time"
+#| fig-width: 90%
 
 pipeline = [match, group, add_fields, sort, project]
 results = list(launches_stage.aggregate(pipeline))
@@ -1076,17 +1093,17 @@ ax2.set_ylabel("Success Rate (%)", color="#e74c3c")
 ax2.tick_params(axis="y", labelcolor="#e74c3c")
 ax2.set_ylim(0, 110)
 
-ax1.set_title("Launch Frequency and Success Rate Over Time")
 fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.95))
 plt.tight_layout()
 plt.savefig("Personal_project_files/images/launch_frequency.png", dpi=150)
 plt.show()
 ```
 
-![Launch Frequency and Success Rate Over Time](Personal_project_files/images/launch_frequency.png){width=90%}
-
+The dual-axis chart tells a compelling growth story. Launch volume increased slowly from 1–2 missions per year to 43 in 2022, showing near-exponential growth from 2017 onward. The success rate line mirrors this maturation: early years were volatile (0% in 2006–2007, 50% in 2008), but from 2017 onward SpaceX achieved a perfect or near-perfect success rate every year. The two dips in 2015 and 2016 correspond to the CRS-7 in-flight breakup and the Amos-6 pad explosion respectively — both pivotal incidents that led to design improvements. The combination of rising cadence and sustained reliability from 2017 onward underscores SpaceX's transition from an experimental startup to a mature, high-tempo launch provider.
 
 ## Core reuse analysis
+
+This pipeline first unwinds the cores array so each booster entry becomes its own document, then filters out entries with missing core IDs or flight numbers. A `$group` stage aggregates per core, taking the maximum flight number as the total flights for that booster and summing landing attempts and successes. The key feature is the `$bucket` stage, which bins cores into flight-count ranges (1, 2, 3–4, 5–7, 8–19), counting how many cores fall into each bucket and computing the average number of successful landings per bucket. This pipeline demonstrates `$bucket` for histogram-style analysis and `$addToSet` for collecting distinct values within groups.
 
 ```{python}
 #| label: core-reuse-analysis-pipelines
@@ -1134,7 +1151,8 @@ project = {"$project": {
 ```
 
 ```{python}
-#| label: core-reuse-analysis-result
+#| label: tbl-core-reuse-analysis-result
+#| tbl-cap: "Core Reuse Distribution and Landing Success"
 
 pipeline = [unwind, match, group, bucket, project]
 cursor = launches_stage.aggregate(pipeline)
@@ -1142,7 +1160,9 @@ pd.DataFrame(cursor)
 ```
 
 ```{python}
-#| label: core-reuse-visual
+#| label: fig-core-reuse
+#| fig-cap: "Core Reuse Distribution and Landing Success"
+#| fig-width: 90%
 
 pipeline = [unwind, match, group, bucket, project]
 results = list(launches_stage.aggregate(pipeline))
@@ -1163,17 +1183,17 @@ ax2.plot(labels, avg_landings, color="#f39c12", marker="o", linewidth=2, label="
 ax2.set_ylabel("Avg Landing Successes", color="#f39c12")
 ax2.tick_params(axis="y", labelcolor="#f39c12")
 
-ax1.set_title("Core Reuse Distribution and Landing Success")
 fig.legend(loc="upper right", bbox_to_anchor=(0.95, 0.95))
 plt.tight_layout()
 plt.savefig("Personal_project_files/images/core_reuse.png", dpi=150)
 plt.show()
 ```
 
-![Core Reuse Distribution](Personal_project_files/images/core_reuse.png){width=90%}
-
+The bar-and-line chart reveals that the majority of cores flew only once. These include early expendable missions and newer cores that have not yet been reused. As the number of flights increases, the count of cores drops sharply, but the average landing successes per core rises steeply, reaching 11.5 for the most-reused bucket. This confirms that reused boosters are not only surviving multiple missions but consistently landing successfully, validating SpaceX's reusability model. The 6 cores in the 8+ bucket represent the fleet's most battle-tested hardware and are central to SpaceX's cost-reduction strategy.
 
 ## Fail rate
+
+This pipeline focuses specifically on landing failures. After unwinding cores and filtering to only those where a landing was actually attempted (`landing_attempt: True`) and a definitive outcome exists, it performs a `$lookup` to join rocket details and groups the results by rocket name. The `$group stage` counts total landing attempts, failures, and successes per rocket type. A `$addFields` stage then computes the landing fail rate as a percentage. By joining with rockets_stage via `$lookup` and `$unwind`, the pipeline attributes each landing failure to a specific rocket type, enabling a direct comparison of landing reliability between Falcon 9 and Falcon Heavy.
 
 ```{python}
 #| label: landing-fail-rate-per-rocket-pipeline
@@ -1240,7 +1260,8 @@ sort = {"$sort": {"landing_attempts": -1}}
 
 
 ```{python}
-#| label: landing-fail-rate-per-rocket-result
+#| label: tbl-landing-fail-rate-per-rocket-result
+#| tbl-cap: "Landing Fail Rate per Rocket Type"
 
 pipeline = [unwind, match, lookup, unwind2, group, add_fields, project, sort]
 cursor = launches_stage.aggregate(pipeline)
@@ -1248,7 +1269,9 @@ pd.DataFrame(cursor)
 ```
 
 ```{python}
-#| label: landing-fail-rate-per-rocket-visual
+#| label: fig-landing-fail-rate-per-rocket
+#| fig-cap: "Landing Fail Rate per Rocket Type"
+#| fig-width: 90%
 
 pipeline = [unwind, match, lookup, unwind2, group, add_fields, project, sort]
 results = list(launches_stage.aggregate(pipeline))
@@ -1267,11 +1290,10 @@ for bar, attempt, rate in zip(bars, attempts, fail_rates):
 
 ax.set_ylabel("Landing Fail Rate (%)")
 ax.set_xlabel("Rocket Type")
-ax.set_title("Landing Fail Rate per Rocket Type")
 ax.set_ylim(0, max(fail_rates) + 15)
 plt.tight_layout()
 plt.savefig("Personal_project_files/images/landing_fail_rate.png", dpi=150)
 plt.show()
 ```
 
-![Landing Fail Rate per Rocket Type](Personal_project_files/images/landing_fail_rate.png){width=90%}
+The bar chart shows that Falcon 9 has a landing fail rate of only 7.2% across 152 attempts. Meaning 141 out of 152 boosters were successfully recovered. Falcon Heavy, with just 9 landing attempts, has a notably higher fail rate of 22.2%. The higher Falcon Heavy rate is partly explained by the complexity of recovering three boosters per mission and the smaller sample size. The colour coding (green for Falcon 9, red for Falcon Heavy) draws attention to this disparity. Nevertheless, both rates are impressive given that routine orbital-class booster recovery was considered impractical before SpaceX pioneered it.
