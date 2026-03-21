@@ -49,6 +49,8 @@ import time
 import string
 import os
 import matplotlib.pyplot as plt
+# to render labels correctly: use a regular ASCII hyphen
+plt.rcParams['axes.unicode_minus'] = False
 from dotenv import load_dotenv
 ```
 
@@ -963,7 +965,6 @@ project = {"$project": {
     "_id": 0,
     "landingpad": "$name",
     "type": 1,
-    "location": 1,
     "status": 1,
     "landing_attempts": 1,
     "landing_successes": 1,
