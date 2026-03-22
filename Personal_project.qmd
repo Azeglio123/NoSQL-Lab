@@ -66,6 +66,7 @@ CNX_STR = os.getenv("MONGO_URI")
 DB_NAME = "spacexdb"
 
 # SpaceX API endpoints
+# Only launches is available in v5
 LAUNCHES_URL = "https://api.spacexdata.com/v5/launches"
 ROCKETS_URL = "https://api.spacexdata.com/v4/rockets"
 LAUNCHPADS_URL = "https://api.spacexdata.com/v4/launchpads"
