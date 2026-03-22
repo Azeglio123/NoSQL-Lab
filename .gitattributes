@@ -1,2 +1,2 @@
-*.qmd linguist-language=Jupyter Notebook
+*.qmd linguist-language=Python
 docker-compose.yml linguist-language=Dockerfile
