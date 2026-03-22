@@ -53,7 +53,7 @@ import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 ```
 
-Next, important secrets or keys are imported from the .env file. The configuration of the database and APIs as well as a folder to store images is set up.
+Next, important secrets or keys are imported from the .env file. The configuration of the database and APIs as well as a folder to store images is set up. The Version 5 of the SpaceX API is only working for fetching the launches, the remaining use version 4.
 
 ```{python}
 #| label: config
@@ -82,13 +82,13 @@ os.makedirs("Personal_project_files/images", exist_ok=True)
 
 ## DB Setup
 
-Before any data is loaded, the connection to MongoDB and the database variable are defined. Then the variables to store the raw data from the API endpoints and the staging collections are defined.
+Before any data is loaded, the connection to MongoDB and the database variable are defined. Then the variables to store the raw data from the API endpoints and the staging collections are defined. **Important:** Since the setup of MongoDB via local Docker environment is out of scope for this project, the 'USE_DOCKER' variable is set to 'False' by default. If set to 'True' please refer to the 'README.md' file on the [GitHub project](https://github.com/Azeglio123/NoSQL-Lab) to set up the project accordingly.
 
 ```{python}
 #| label: connection
 
 # Toggle between local Docker and Atlas
-USE_DOCKER = True
+USE_DOCKER = False
 
 if USE_DOCKER:
     CONNECTION = CNX_STR_EXPR
@@ -1325,6 +1325,8 @@ Storing dates as strings rather than BSON Date objects prevents the use of Mongo
 Pre-computing fields like `launch_year`, `core_count`, and `payload_count` during the transformation phase eliminated repetitive `$size` and `$year` calculations in the analysis pipelines.
 
 The SpaceX API stores rocket and launchpad as string IDs rather than embedded documents. Using both patterns revealed the benefits and trade-offs. While `cores` are embedded directly within launch documents for fast access, while `rocket` and `launchpad` are stored as string references to separate collections requiring `$lookup` joins. Embedding reduces query complexity but duplicates data, while referencing keeps data normalized but increases aggregation complexity.
+
+I also was able to set up MongoDB via Docker and use MongoDB Express as UI tool to view the database and collections.
 
 Overall, I really enjoyed working on this small project and it gave me the opportunity to build something I am interested in.
 
