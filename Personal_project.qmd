@@ -1178,10 +1178,6 @@ plt.savefig("Personal_project_files/images/landing_success_per_pad.png", dpi=150
 plt.show()
 ```
 
-The chart confirms an intuitive pattern: land-based recovery (RTLS) is more reliable than sea-based recovery (ASDS). LZ-2, LZ-4, and ASOG all achieve a perfect 100% landing rate, while LZ-1 is close behind at 95.2%. Among the drone ships, JRTI performs best at 97.5%, whereas OCISLY, despite being the most-used pad with 63 attempts, has the lowest active-pad success rate at 85.7%, accounting for the majority of SpaceX's landing failures. The retired JRTI-1, with 0 out of 2 successes, reflects the experimental early days of autonomous ship landings. Overall, SpaceX's landing infrastructure has matured to a remarkably high standard across both platforms.
-
-
-
 ## Fail rate
 
 This pipeline focuses specifically on landing failures. After unwinding cores and filtering to only those where a landing was actually attempted (`landing_attempt: True`) and a definitive outcome exists, it performs a `$lookup` to join rocket details and groups the results by rocket name. The `$group stage` counts total landing attempts, failures, and successes per rocket type. A `$addFields` stage then computes the landing fail rate as a percentage. By joining with rockets_stage via `$lookup` and `$unwind`, the pipeline attributes each landing failure to a specific rocket type, enabling a direct comparison of landing reliability between Falcon 9 and Falcon Heavy.
