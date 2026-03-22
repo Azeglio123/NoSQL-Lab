@@ -1,2 +1,1 @@
-*.qmd linguist-language=Python
 docker-compose.yml linguist-language=Dockerfile
