@@ -1321,3 +1321,7 @@ Pre-computing fields like `launch_year`, `core_count`, and `payload_count` durin
 The SpaceX API stores rocket and launchpad as string IDs rather than embedded documents. Using both patterns revealed the benefits and trade-offs. While `cores` are embedded directly within launch documents for fast access, while `rocket` and `launchpad` are stored as string references to separate collections requiring `$lookup` joins. Embedding reduces query complexity but duplicates data, while referencing keeps data normalized but increases aggregation complexity.
 
 Overall, I really enjoyed working on this small project and it gave me the opportunity to build something I am interested in.
+
+# Use of GenAI
+
+I used Claude mainly for Debugging (when aggregations did not work), for guidance about the pattern "problem" with the ID strings and general brainstorming.
