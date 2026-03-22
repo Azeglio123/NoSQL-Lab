@@ -707,13 +707,10 @@ Every launch contains an embedded array of `CoreEmbed` objects representing the 
 
 ## Launch success rate by rocket
 
-This pipeline begins by filtering out any launches that lack a definitive outcome (success is either `True` or `False`). It then performs a `$lookup` to join each launch with its corresponding rocket document from `rockets_stage`, using the string ID stored in the rocket field. After flattening the joined array with `$unwind`, the pipeline groups all launches by rocket name and counts total launches, successes, and failures. A `$project` stage computes the success rate as a percentage (rounded to one decimal), and the results are sorted in descending order by total launches. This pipeline demonstrates the use of `$lookup` for cross-collection joins, `$cond` for conditional counting, and arithmetic operators (`$divide`, `$multiply`, `$round`) for derived metrics.
+This pipeline performs a `$lookup` to join each launch with its corresponding rocket document from `rockets_stage`, using the string ID stored in the rocket field. After flattening the joined array with `$unwind`, the pipeline groups all launches by rocket name and counts total launches, successes, and failures. A `$project` stage computes the success rate as a percentage (rounded to one decimal), and the results are sorted in descending order by total launches. This pipeline demonstrates the use of `$lookup` for cross-collection joins, `$cond` for conditional counting, and arithmetic operators (`$divide`, `$multiply`, `$round`) for derived metrics.
 
 ```{python}
 #| label: launch-success-rate-by-rocket-type-pipeline
-
-# exclude upcoming launches without a result
-match = {"$match": {"success": {"$in": [True, False]}}}
 
 # join rocket details from rockets_stage by rocket id
 lookup = {"$lookup": {
@@ -758,7 +755,7 @@ sort = {"$sort": {"total_launches": -1}}
 #| label: tbl-launch-success-rate-by-rocket-type-result
 #| tbl-cap: "Launch Success Rate by Rocket"
 
-pipeline = [match, lookup, unwind, group, project, sort]
+pipeline = [lookup, unwind, group, project, sort]
 cursor = launches_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
@@ -768,7 +765,7 @@ pd.DataFrame(cursor)
 #| fig-cap: "Launch Success Rate by Rocket"
 #| fig-width: 90%
 
-pipeline = [match, lookup, unwind, group, project, sort]
+pipeline = [lookup, unwind, group, project, sort]
 results = list(launches_stage.aggregate(pipeline))
 
 rockets = [r["rocket"] for r in results]
@@ -1020,9 +1017,6 @@ This pipeline groups all valid launches by their pre-computed `launch_year` fiel
 ```{python}
 #| label: launch-frequency-over-time-pipeline
 
-# exclude upcoming launches without a result
-match = {"$match": {"success": {"$in": [True, False]}}}
-
 # group by year and count total, successful and failed launches
 group = {"$group": {
     "_id": "$launch_year",
@@ -1058,7 +1052,7 @@ project = {"$project": {
 #| label: tbl-launch-frequency-over-time-result
 #| tbl-cap: "Launch Frequency and Success Rate Over Time"
 
-pipeline = [match, group, add_fields, sort, project]
+pipeline = [group, add_fields, sort, project]
 cursor = launches_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
@@ -1068,7 +1062,7 @@ pd.DataFrame(cursor)
 #| fig-cap: "Launch Frequency and Success Rate Over Time"
 #| fig-width: 90%
 
-pipeline = [match, group, add_fields, sort, project]
+pipeline = [group, add_fields, sort, project]
 results = list(launches_stage.aggregate(pipeline))
 
 years = [r["year"] for r in results]
