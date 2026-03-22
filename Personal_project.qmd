@@ -62,7 +62,8 @@ Next, important secrets or keys are imported from the .env file. The configurati
 load_dotenv()
 
 # MongoDB
-CNX_STR = os.getenv("MONGO_URI")
+CNX_STR_COMP = os.getenv("COMPASS_URI")
+CNX_STR_EXPR = os.getenv("EXPRESS_URI")
 DB_NAME = "spacexdb"
 
 # SpaceX API endpoints
@@ -86,8 +87,16 @@ Before any data is loaded, the connection to MongoDB and the database variable a
 ```{python}
 #| label: connection
 
+# Toggle between local Docker and Atlas
+USE_DOCKER = True
+
+if USE_DOCKER:
+    CONNECTION = CNX_STR_EXPR
+else:
+    CONNECTION = CNX_STR_COMP
+
 # Connection to MongoDB
-client = pymongo.MongoClient(CNX_STR)
+client = pymongo.MongoClient(CONNECTION)
 db = client[DB_NAME]
 
 launches_raw = db["launches_raw"]
