@@ -6,6 +6,8 @@ date: today
 number-sections: true
 number-depth: 3
 toc: true
+bibliography: refs.bib
+csl: https://www.zotero.org/styles/apa-with-abstract
 format:
     pdf:
         fontsize: 10pt
@@ -51,9 +53,12 @@ import string
 import os
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
+from IPython.display import Image, display
+from bson import ObjectId
+import random
 ```
 
-Next, important secrets or keys are imported from the .env file. The configuration of the database and APIs as well as a folder to store images is set up. The Version 5 of the SpaceX API is only working for fetching the launches, the remaining use version 4.
+Next, important secrets or keys are imported from the .env file. The configuration of the database and APIs as well as a folder to store images is set up. The Version 5 of the SpaceX API is only working for fetching the launches, the remaining endpoints use version 4.
 
 ```{python}
 #| label: config
@@ -82,7 +87,9 @@ os.makedirs("Personal_project_files/images", exist_ok=True)
 
 ## DB Setup
 
-Before any data is loaded, the connection to MongoDB and the database variable are defined. Then the variables to store the raw data from the API endpoints and the staging collections are defined. **Important:** Since the setup of MongoDB via local Docker environment is out of scope for this project, the 'USE_DOCKER' variable is set to 'False' by default. If set to 'True' please refer to the 'README.md' file on the [GitHub project](https://github.com/Azeglio123/NoSQL-Lab) to set up the project accordingly.
+Before any data is loaded, the connection to MongoDB and the database variable are defined. Then the variables to store the raw data from the API endpoints and the staging collections are defined. **Important:** Since the setup of MongoDB via local Docker environment is out of scope for this project, the `USE_DOCKER` variable is set to `False` by default. If set to `True` please refer to the `README.md` file on the [GitHub project](https://github.com/Azeglio123/NoSQL-Lab) to set up the project accordingly.
+
+{{< pagebreak >}}
 
 ```{python}
 #| label: connection
@@ -146,7 +153,7 @@ print("landingpads_raw:", landingpads_raw.count_documents({}))
 
 ## Raw Data Loading
 
-Following the completed configuration steps, the raw dat is fetched from the API endpoints and stored in the collections defined as "raw". For each collection, the outputs show how many documents were received when calling the API and how many documents are stored in the respective collection. Ideally, each output pair should show the same number. Else this security mechanism indicates that duplicate entries are stored or further investigation is needed.
+Following the completed configuration steps, the raw dat is fetched from the API endpoints and stored in the collections defined as *raw*. For each collection, the outputs show how many documents were received when calling the API and how many documents are stored in the respective collection. Ideally, each output pair should show the same number. Else this security mechanism indicates that duplicate entries are stored or further investigation is needed.
 
 ```{python}
 #| label: loading-raw-data
@@ -203,6 +210,8 @@ if landingpads_data:
 
 print("Documents in landingpads_raw:", landingpads_raw.count_documents({}))
 ```
+
+{{< pagebreak >}}
 
 ## Data Inspection
 
@@ -315,7 +324,9 @@ pp.pprint(list(launches_raw.aggregate([
 ])))
 ```
 
-The `date_utc` field is stored as a string (type `"string"`) rather than as a BSON Date object. This prevents the use of MongoDB's date operators such as `$year` or `$month` directly on the raw data. During transformation, `$dateFromString` will be used to convert these strings into proper Date objects, enabling time-based aggregations.
+The `date_utc` field is stored as a string (type `'string'`) rather than as a BSON Date object. This prevents the use of MongoDB's date operators such as `$year` or `$month` directly on the raw data. During transformation, `$dateFromString` will be used to convert these strings into proper Date objects, enabling time-based aggregations.
+
+{{< pagebreak >}}
 
 ```{python}
 #| label: inspect-array-sizes-of-cores-and-payloads
@@ -333,7 +344,7 @@ pp.pprint(list(launches_raw.aggregate([
 ])))
 ```
 
-Most launches carry a single core and one or two payloads. This is expected since the majority of SpaceX missions use a single Falcon 9 booster. Falcon Heavy missions, which use three cores, would show a higher `core_count`. The `cores` array contains embedded documents with landing information, making it a key source for the reuse and landing analyses later.
+Most launches carry a single core and one or two payloads. This is expected since the majority of SpaceX missions use a single Falcon 9 booster. Falcon Heavy missions, which use three cores, would show a higher `core_count` [@uri_5_2023]. The `cores` array contains embedded documents with landing information, making it a key source for the reuse and landing analyses later.
 
 ```{python}
 #| label: check-launches-empty-arrays
@@ -350,7 +361,8 @@ print("Launches with empty/missing payloads:",
       }))
 ```
 
-No launches have an empty `cores` array, meaning every launch has at least one booster entry — this is essential for the core reuse and landing analyses. However, 12 launches have empty `payloads` arrays. This may be because these 12 empty payload launches were test flights. Since payload data is not central to the research questions of this project, no further investigation was done and these entries do not need to be excluded. 
+No launches have an empty `cores` array, meaning every launch has at least one booster entry. This is essential for the core reuse and landing analyses. However, 12 launches have empty `payloads` arrays. This may be because these 12 empty payload launches were test flights. Since payload data is not central to the research questions of this project, no further investigation was done and these entries do not need to be excluded. 
+\newline
 
 ```{python}
 #| label: inspect-launchpads
@@ -372,7 +384,9 @@ pp.pprint(list(launchpads_raw.aggregate([
 ])))
 ```
 
-The launchpads collection contains 6 entries spanning three statuses: active, retired, and under construction. CCSFS SLC 40 leads with 99 launch attempts, followed by KSC LC 39A with 55 and VAFB SLC 4E with 28. KSC LC 39A stands out with a perfect 55/55 success record. Kwajalein Atoll is the only non-US-mainland pad, located in the Marshall Islands, and was used exclusively for early Falcon 1 missions with only 2 out of 5 successes. VAFB SLC 3W is retired with zero recorded attempts, and STLS (SpaceX South Texas Launch Site) is still under construction. All documents contain the expected fields without null values.
+The launchpads collection contains 6 entries spanning three statuses: `active`, `retired`, and `under construction`. CCSFS SLC 40 leads with 99 launch attempts, followed by KSC LC 39A with 55 and VAFB SLC 4E with 28. KSC LC 39A stands out with a perfect 55/55 success record. Kwajalein Atoll is the only non-US-mainland pad, located in the Marshall Islands, and was used exclusively for early Falcon 1 missions with only 2 out of 5 successes [@david_spacex_2005]. VAFB SLC 3W is retired with zero recorded attempts, and STLS (SpaceX South Texas Launch Site) is still under construction. All documents contain the expected fields without null values.
+
+{{< pagebreak >}}
 
 ```{python}
 #| label: inspect-landingpads
@@ -462,7 +476,7 @@ print("launchpads_stage:", launchpads_stage.count_documents({}))
 print("landinpads_stage:", landingpads_stage.count_documents({}))
 ```
 
-The rockets transformation addresses the need to standardize identifiers by remapping the API's `id` field to MongoDB's `_id`. Additionally, the `first_flight` string is converted to a Date object using `$dateFromString`, consistent with the date format issue identified during inspection. Only fields relevant to the analysis — such as `name`, `cost_per_launch`, and `success_rate_pct` — are retained via `$project` to keep the staging collection lean.
+The rockets transformation addresses the need to standardize identifiers by remapping the API's `id` field to MongoDB's `_id`. Additionally, the `first_flight` string is converted to a Date object using `$dateFromString`, consistent with the date format issue identified during inspection. Only fields relevant to the analysis, such as `name`, `cost_per_launch`, and `success_rate_pct`, are retained via `$project` to keep the staging collection lean.
 
 ```{python}
 #| label: stage-rockets-pipeline
@@ -620,7 +634,7 @@ project = {"$project": {
 merge = {"$merge": "landingpads_stage"}
 ```
 
-58 cores have a null `landpad` field. As the first 10 results show, these are all early missions (2006–2013) where `landing_attempt` is `false` and no recovery was attempted. This is expected, as SpaceX did not begin attempting booster landings until late 2015. These cores are not erroneous and do not need to be cleaned — they simply represent missions where landing infrastructure was not yet available. The analysis pipelines in sections 6.3 and 6.6 already handle this by filtering on `landing_attempt: true`.
+58 cores have a null `landpad` field. As the first 10 results show, these are all early missions (2006–2013) where `landing_attempt` is `false` and no recovery was attempted. This is expected, as SpaceX did not begin attempting booster landings until late 2015 [@wall_wow_2015]. These cores are not erroneous and do not need to be cleaned. They simply represent missions where landing infrastructure was not yet available. The analysis pipelines in sections 6.3 and 6.6 already handle this by filtering on `landing_attempt: true`.
 
 ```{python}
 #| label: stage-landingpads-result
@@ -632,7 +646,7 @@ print(landingpads_stage.count_documents({}))
 
 No cores store `landpad` as an array, confirming that the field is always either a single string reference or null. This means the relationship between a core entry and a landing pad is `0..1` — each core references at most one landing pad. This finding is reflected in the class diagram and ensures that no special handling for multi-valued `landpad` fields is needed in the analysis pipelines.
 
-# Class Diagramm
+# Class Diagram
 
 The class diagram below visualizes the structure of the staged data as it is stored in MongoDB. It shows the four collections used in this project, their fields and data types, as well as the relationships between them.
 
@@ -845,6 +859,8 @@ cursor = launches_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
 
+{{< pagebreak >}}
+
 ```{python}
 #| label: fig-launch-frequency-over-time
 #| fig-cap: "Launch Frequency and Success Rate Over Time"
@@ -959,6 +975,8 @@ cursor = launchpads_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
 
+{{< pagebreak >}}
+
 ```{python}
 #| label: fig-most-active-launchpads
 #| fig-cap: "Most Active SpaceX Launchpads"
@@ -1049,6 +1067,8 @@ pipeline = [unwind, match, group, bucket, project]
 cursor = launches_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
+
+{{< pagebreak >}}
 
 ```{python}
 #| label: fig-core-reuse
@@ -1158,6 +1178,8 @@ cursor = landingpads_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
 
+{{< pagebreak >}}
+
 ```{python}
 #| label: fig-landing-success-rate-per-pad
 #| fig-cap: "Landing Success Rate per Landing Pad"
@@ -1254,7 +1276,6 @@ project = {"$project": {
 sort = {"$sort": {"landing_attempts": -1}}
 ```
 
-
 ```{python}
 #| label: tbl-landing-fail-rate-per-rocket-result
 #| tbl-cap: "Landing Fail Rate per Rocket Type"
@@ -1263,6 +1284,8 @@ pipeline = [unwind, match, lookup, unwind2, group, add_fields, project, sort]
 cursor = launches_stage.aggregate(pipeline)
 pd.DataFrame(cursor)
 ```
+
+{{< pagebreak >}}
 
 ```{python}
 #| label: fig-landing-fail-rate-per-rocket
@@ -1292,19 +1315,21 @@ plt.savefig("Personal_project_files/images/landing_fail_rate.png", dpi=150)
 plt.show()
 ```
 
+{{< pagebreak >}}
+
 # Conclusions
 
 With the analysis and visualizations done, it is now possible to answer the research questions.
 
 1. How has SpaceX's launch success rate evolved over time, and which rocket types are most reliable?
 
-SpaceX's early years were volatile marked by a few failed launches. In 2009, the first successful launch was achived and after that the company ramped up its launches near two digits per year. Plagued by two failures from 2015 until 2016, SpaceX was able to get its success rate back on track, break the number two digit mark of successful launches per year, and keep the numbers stable in the following years. It reached its peak success in the last available year, 2022, with 43 successful launches. 
+SpaceX's early years were volatile marked by a few failed launches. In 2009, the first successful launch was achieved and after that the company ramped up its launches near two digits per year. Plagued by two failures from 2015 until 2016, SpaceX was able to get its success rate back on track, break the number two digit mark of successful launches per year, and keep the numbers stable in the following years. It reached its peak success in the last available year, 2022, with 43 successful launches. 
 
-Falcon 1 is the most unreliable rocket with an overall success rate of 40%. It was a good decision to abandon this rocket type and focus on improved versions. The most expensive rocket Falcon Heavy, has the perfect success rate. Altough is has only seen a total of 3 launches until 2022. The lighter rocket Falcon 9, dominates SpaceX’s launch history with 178 missions and a 98.9% success rate. The rocket has only 2 failures across its entire operational life and is therefore the most reliable rocket type.
+Falcon 1 is the most unreliable rocket with an overall success rate of 40%. It was a good decision to abandon this rocket type and focus on improved versions. The most expensive rocket Falcon Heavy, has the perfect success rate. Although is has only seen a total of 3 launches until 2022. The lighter rocket Falcon 9, dominates SpaceX’s launch history with 178 missions and a 98.9% success rate. The rocket has only 2 failures across its entire operational life and is therefore the most reliable rocket type.
 
 2. Which launch sites are most active, and how does location affect launch success?
 
-Figure 4 shows that CCSFS SLC 40 in Florida is SpaceX’s workhorse facility with 99 launches and a 98% success rate. Its 2 failures are the only failures across all active US-mainland pads. KSC LC 39A and VAFB SLC 4E both maintain flawless 100% records with 55 and 27 launches respectively. Kwajalein Atoll stands out as the sole non-continental site with a low 40% success rate. It could be that all Falcon 1 launches were executed on the Atoll but another pipeline would be needed to confirm this. VAFB SLC 3W (retired, zero launches) and STLS (under construction) confirm that SpaceX’s operational launch capacity is currently concentrated across three active Florida and California sites.
+Figure 4 shows that CCSFS SLC 40 in Florida is SpaceX’s workhorse facility with 99 launches and a 98% success rate. Its 2 failures are the only failures across all active US-mainland pads. KSC LC 39A and VAFB SLC 4E both maintain flawless 100% records with 55 and 27 launches respectively. Kwajalein Atoll stands out as the sole non-continental site with a low 40% success rate. VAFB SLC 3W (retired, zero launches) and STLS (under construction) confirm that SpaceX’s operational launch capacity is currently concentrated across three active Florida and California sites.
 
 3. How successful is SpaceX at recovering rocket boosters, and which landing infrastructure performs best?
 
@@ -1312,19 +1337,21 @@ Figure 5 reveals that the majority of cores flew only once. These include early 
 
 Table 5 shows that land-based recovery (RTLS) is more reliable than sea-based recovery (ASDS). LZ-2, LZ-4, and ASOG all achieve a perfect 100% landing rate, while LZ-1 is close behind at 95.2%. Among the drone ships, JRTI performs best at 97.5%, whereas OCISLY, despite being the most-used pad with 63 attempts, has the lowest active-pad success rate at 85.7%, accounting for the majority of SpaceX’s landing failures. The retired JRTI-1, with 0 out of 2 successes, reflects the experimental early days of autonomous ship landings. Overall, SpaceX’s landing infrastructure has matured to a remarkably high standard across both platforms.
 
+{{< pagebreak >}}
+
 4. How do landing failure rates differ between rocket types?
 
 Figure 7 shows that Falcon 9 has a landing fail rate of only 7.2% across 152 attempts. Meaning 141 out of 152 boosters were successfully recovered. Falcon Heavy, with just 9 landing attempts, has a notably higher fail rate of 22.2%. The higher Falcon Heavy rate is partly explained by the complexity of recovering three boosters per mission (each of the three cores attempts an individual landing, resulting in 9 attempts across just 3 launches) and the smaller sample size. The colour coding (green for Falcon 9, red for Falcon Heavy) draws attention to this disparity. 
 
 # Learnings
 
-I had a similar project in one of my semesters during my Bachelor degree. Because of that I was already familiar with MongoDB. The lectures and this project deepened my knowledge of the aggregations and options how to make queries with pymongo. 
+I had a similar project in one of my semesters during my Bachelor degree. Because of that, I was already familiar with MongoDB. The lectures and this project deepened my knowledge of the aggregations and options how to make queries with pymongo. 
 
 Storing dates as strings rather than BSON Date objects prevents the use of MongoDB's built-in date operators like `$year` or `$month`. Converting dates early in the ELT process saves effort and time in the downstream analysis.
 
 Pre-computing fields like `launch_year`, `core_count`, and `payload_count` during the transformation phase eliminated repetitive `$size` and `$year` calculations in the analysis pipelines.
 
-The SpaceX API stores rocket and launchpad as string IDs rather than embedded documents. Using both patterns revealed the benefits and trade-offs. While `cores` are embedded directly within launch documents for fast access, while `rocket` and `launchpad` are stored as string references to separate collections requiring `$lookup` joins. Embedding reduces query complexity but duplicates data, while referencing keeps data normalized but increases aggregation complexity.
+The SpaceX API stores rocket and launchpad as string IDs rather than embedded documents. Using both patterns revealed the benefits and trade-offs. While `cores` are embedded directly within launch documents for fast access, whereas `rocket` and `launchpad` are stored as string references to separate collections requiring `$lookup` joins. Embedding reduces query complexity but duplicates data, while referencing keeps data normalized but increases aggregation complexity.
 
 I also was able to set up MongoDB via Docker and use MongoDB Express as UI tool to view the database and collections.
 
@@ -1333,3 +1360,47 @@ Overall, I really enjoyed working on this small project and it gave me the oppor
 # Use of GenAI
 
 I used Claude mainly for Debugging (when aggregations did not work), for guidance about the pattern "problem" with the ID strings and general brainstorming.
+
+{{< pagebreak >}}
+
+# Falcon Heavy Image
+
+As a fun fact, most of the SpaceX endpoints include images of the entities. Below, the url of a Falcon Heavy image from the raw collection is loaded and displayed in Figure 8.
+
+```{python}
+#| label: fig-rocket-image
+#| fig-cap: "Image of Falcon Heavy Rocket"
+#| fig-width: 90%
+
+from PIL import Image as PILImage
+from io import BytesIO
+import matplotlib.image as mpimg
+
+# Get Falcon Heavy rocket image from raw collection using aggregation
+pipeline = [
+    {"$match": {"name": "Falcon Heavy"}},
+    {"$project": {"_id": 1, "flickr_images": 1}}
+]
+
+result = list(rockets_raw.aggregate(pipeline))
+image_url = random.choice(result[0]["flickr_images"])
+
+# Save image to file
+response = requests.get(image_url)
+img = PILImage.open(BytesIO(response.content))
+img.save("Personal_project_files/images/falcon_heavy.png")
+
+# Display from local file using matplotlib (works in PDF rendering)
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.imshow(mpimg.imread("Personal_project_files/images/falcon_heavy.png"))
+ax.axis("off")
+plt.tight_layout()
+plt.show()
+```
+
+{{< pagebreak >}}
+
+# References
+
+::: {#refs}
+:::
